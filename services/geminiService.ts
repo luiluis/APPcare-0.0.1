@@ -1,17 +1,20 @@
 
 // Fix Gemini API implementation according to guidelines
 import { GoogleGenAI } from "@google/genai";
-import { FinancialRecord, Evolution, Resident } from "../types";
+import { FinancialRecord, Evolution } from "../types.ts";
+
+// Acesso seguro para não quebrar a execução se process for undefined
+const API_KEY = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
 
 // Initialize the client strictly as requested
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+const ai = new GoogleGenAI({ apiKey: API_KEY || '' });
 
 export const analyzeFinancialHealth = async (
   records: FinancialRecord[], 
   branchName: string
 ): Promise<string> => {
   try {
-    if (!process.env.API_KEY) {
+    if (!API_KEY) {
       return `Simulação de Resposta da IA (Sem API Key configurada):\n\nBaseado nos dados da ${branchName}, observo que a receita recorrente cobre as despesas fixas com uma margem de 15%. Recomendo atenção aos custos variáveis de suprimentos que subiram 5% este mês.`;
     }
 
@@ -52,7 +55,7 @@ export const generateHandoverSummary = async (
   evolutions: (Evolution & { residentName: string })[]
 ): Promise<string> => {
   try {
-    if (!process.env.API_KEY) {
+    if (!API_KEY) {
        return "Dona Maria apresentou confusão mental às 10h. Sr. João teve pico pressórico (160/90) após o almoço, medicado conforme SOS. Reposição de fraldas para Unidade Jardim é urgente devido ao baixo estoque.";
     }
 
@@ -76,7 +79,7 @@ export const generateHandoverSummary = async (
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview', // Flash é excelente para resumos rápidos
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
 
