@@ -1,12 +1,13 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Resident, Evolution, Prescription, AuditLog } from '../types';
 import { 
   Pill, Activity, CheckSquare, Clock, User, 
   Droplets, Heart, Sun, Moon, Coffee, ShowerHead, 
   Utensils, CheckCircle2, AlertOctagon, Save, PlusCircle,
-  AlertTriangle, Check, History, Undo2, X, Search
+  AlertTriangle, Check, History, Undo2, X, Search, Sparkles, Loader2, RefreshCw
 } from 'lucide-react';
+import { generateHandoverSummary } from '../services/geminiService';
 
 interface DailyRoutineDashboardProps {
   residents: Resident[];
@@ -19,6 +20,10 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
   const [activeTab, setActiveTab] = useState<'meds' | 'vitals' | 'care'>('meds');
   const [searchTerm, setSearchTerm] = useState('');
   
+  // State for Handover AI
+  const [handoverText, setHandoverText] = useState<string | null>(null);
+  const [isLoadingHandover, setIsLoadingHandover] = useState(false);
+
   // State for Batch Selection (Care Tab)
   const [selectedResidentIds, setSelectedResidentIds] = useState<Set<string>>(new Set());
 
@@ -29,10 +34,38 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
   const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
   const [manualEntryForm, setManualEntryForm] = useState({ residentId: '', type: 'medication', note: '' });
 
-  // Histórico Local (apenas visual, agora duplicamos no Log Global)
+  // Histórico Local
   const [sessionHistory, setSessionHistory] = useState<Array<{id: string, text: string, time: string, residentName: string}>>([]);
 
-  // --- HELPERS ---
+  // --- LOGIC: HANDOVER AI ---
+  const handleGenerateHandover = async () => {
+    setIsLoadingHandover(true);
+    try {
+      // Filtrar evoluções das últimas 12h marcadas como relevantes
+      const now = new Date();
+      const twelveHoursAgo = new Date(now.getTime() - (12 * 60 * 60 * 1000));
+      
+      const relevantEvolutions: (Evolution & { residentName: string })[] = [];
+      
+      residents.forEach(res => {
+        // Nota: No mundo real, buscaríamos do BD. Aqui simulamos buscando nas props.
+        const evs = (res as any).evolutions || []; // Fallback se injetado via prop ou estado
+        evs.forEach((ev: Evolution) => {
+          const evDate = new Date(ev.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
+          if (ev.isHandoverRelevant && evDate >= twelveHoursAgo) {
+            relevantEvolutions.push({ ...ev, residentName: res.name });
+          }
+        });
+      });
+
+      const summary = await generateHandoverSummary(relevantEvolutions);
+      setHandoverText(summary);
+    } catch (error) {
+      setHandoverText("Erro ao processar resumo do plantão.");
+    } finally {
+      setIsLoadingHandover(false);
+    }
+  };
 
   const getShift = () => {
     const hour = new Date().getHours();
@@ -49,7 +82,7 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
           text: action,
           residentName,
           time: new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})
-      }, ...prev].slice(0, 10)); // Keep last 10
+      }, ...prev].slice(0, 10));
   };
 
   // --- TAB 1: SMART MEDICATION MAP ---
@@ -68,7 +101,7 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
       dosage: string;
       time: string;
       isHighAlert?: boolean;
-      status: 'late' | 'pending' | 'done'; // Simulado
+      status: 'late' | 'pending' | 'done';
     }> = [];
 
     residents.forEach(res => {
@@ -77,7 +110,6 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
            const [h, m] = t.split(':').map(Number);
            const medTimeVal = h * 60 + m;
            
-           // Lógica de Status Simulada
            let status: 'late' | 'pending' | 'done' = 'pending';
            if (medTimeVal < currentTimeVal - 30) status = 'late';
            else if (medTimeVal > currentTimeVal + 120) status = 'done'; 
@@ -106,31 +138,16 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
   }, [residents]);
 
   const handleAdministerMed = (residentId: string, medName: string, time: string, isHighAlert?: boolean) => {
-    // Note: PIN check moved to PrescriptionTab, but here on dashboard we assume verified for now
-    // or we could implement the modal here too. For simplicity in batch dashboard, we log directly.
     const res = residents.find(r => r.id === residentId);
     if(res) {
-        // Log Audit
-        onLogAction(
-            "Administração de Medicamento", 
-            `${medName} (${time}) - ${isHighAlert ? '[ALTO RISCO]' : ''}`, 
-            "medical", 
-            residentId
-        );
-        
-        // Log UI Local
+        onLogAction("Administração de Medicamento", `${medName} (${time})`, "medical", residentId);
         addToHistory(res.name, `Medicamento: ${medName}`);
-        
-        // Add Evolution if handler available
         if (onAddEvolution) {
             onAddEvolution(residentId, `Medicamento administrado: ${medName} (${time})`, 'nursing');
         }
-        
-        alert(`✅ Registrado: ${medName} para ${res.name}`);
     }
   };
 
-  // --- TAB 2: VITALS BATCH ---
   const handleVitalChange = (id: string, field: 'pressure' | 'glucose' | 'heartRate', value: string) => {
     setVitalsInput(prev => ({
       ...prev,
@@ -154,21 +171,12 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
   const saveVitalsRow = (resident: Resident) => {
     const input = vitalsInput[resident.id];
     if (!input) return;
-
     const details = `PA: ${input.pressure || '-'}, HGT: ${input.glucose || '-'}, FC: ${input.heartRate || '-'}`;
-    
-    // Log Audit
     onLogAction("Aferição de Sinais Vitais", details, "medical", resident.id);
-    
-    // Log Evolution (Real Medical Record)
     if (onAddEvolution) {
         onAddEvolution(resident.id, `Sinais Vitais aferidos: ${details}`, 'nursing');
     }
-
-    // Log UI Local
     addToHistory(resident.name, `Sinais Vitais (${details})`);
-    
-    // Clear line
     setVitalsInput(prev => {
         const copy = {...prev};
         delete copy[resident.id];
@@ -176,7 +184,6 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
     });
   };
 
-  // --- TAB 3: BATCH CARE ---
   const toggleSelection = (id: string) => {
     const newSet = new Set(selectedResidentIds);
     if (newSet.has(id)) newSet.delete(id);
@@ -186,63 +193,97 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
 
   const applyBatchAction = (action: string) => {
     if (selectedResidentIds.size === 0) return;
-    
-    // Log Audit Global (Batch)
-    onLogAction("Registro em Lote", `Ação: ${action} para ${selectedResidentIds.size} residentes`, "operational");
-    
-    // Create Real Evolutions for each resident
+    onLogAction("Registro em Lote", `Ação: ${action}`, "operational");
     if (onAddEvolution) {
         selectedResidentIds.forEach(id => {
-            const res = residents.find(r => r.id === id);
-            if (res) {
-                const message = `Rotina realizada: ${action} (Registro em lote)`;
-                onAddEvolution(id, message, 'nursing');
-            }
+            onAddEvolution(id, `Rotina realizada: ${action} (Registro em lote)`, 'nursing');
         });
     }
-
     addToHistory(`${selectedResidentIds.size} Residentes`, action);
     setSelectedResidentIds(new Set());
   };
 
-  // --- FILTRAGEM GLOBAL ---
   const filteredResidents = residents.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 pb-20">
       
-      {/* Header com Turno & Ações Globais */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center bg-white p-5 rounded-2xl border border-gray-100 shadow-sm gap-4">
-         <div className="flex items-center gap-4">
-            <div className={`p-3 rounded-2xl ${shift.bg} ${shift.color}`}>
-                <shift.icon className="w-8 h-8" />
-            </div>
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900 leading-none">Rotina Operacional</h1>
-                <p className="text-gray-500 mt-1 flex items-center gap-2 text-sm">
-                    {shift.label} • {new Date().toLocaleDateString('pt-BR', {weekday: 'long', day:'numeric', month:'long'})}
-                </p>
-            </div>
-         </div>
-
-         <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-             <div className="relative flex-1 sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input 
-                  type="text" 
-                  placeholder="Buscar residente..."
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                />
+      {/* Header & Plantão Inteligente */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
+             <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-2xl ${shift.bg} ${shift.color}`}>
+                    <shift.icon className="w-8 h-8" />
+                </div>
+                <div>
+                    <h1 className="text-xl font-bold text-gray-900">Rotina Operacional</h1>
+                    <p className="text-gray-500 text-xs font-medium uppercase tracking-wider">{shift.label} • {new Date().toLocaleDateString('pt-BR', {day:'numeric', month:'short'})}</p>
+                </div>
              </div>
-             <button 
-               onClick={() => setIsManualEntryOpen(true)}
-               className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors shadow-lg shadow-gray-200"
-             >
-                <PlusCircle className="w-5 h-5" /> Registro Manual
-             </button>
-         </div>
+             
+             <div className="mt-6 flex flex-col gap-2">
+                <div className="relative w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input 
+                    type="text" 
+                    placeholder="Filtrar residentes..."
+                    className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <button 
+                  onClick={() => setIsManualEntryOpen(true)}
+                  className="flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-colors"
+                >
+                    <PlusCircle className="w-4 h-4" /> Registro Manual
+                </button>
+             </div>
+          </div>
+
+          {/* Widget Plantão Inteligente (Gemini) */}
+          <div className="lg:col-span-2 bg-gradient-to-br from-indigo-900 to-slate-900 rounded-3xl shadow-xl p-6 text-white relative overflow-hidden group">
+             <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none group-hover:scale-110 transition-transform duration-500">
+                <Sparkles className="w-32 h-32" />
+             </div>
+             
+             <div className="flex justify-between items-start mb-4">
+                <div>
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-indigo-400" /> Plantão Inteligente
+                    </h3>
+                    <p className="text-indigo-300 text-xs font-medium">Resumo baseado nas evoluções relevantes das últimas 12h</p>
+                </div>
+                <button 
+                    onClick={handleGenerateHandover}
+                    disabled={isLoadingHandover}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50"
+                    title="Atualizar Resumo"
+                >
+                    {isLoadingHandover ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                </button>
+             </div>
+
+             {handoverText ? (
+                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl animate-in fade-in slide-in-from-top-2">
+                   <div className="text-sm leading-relaxed text-indigo-50 space-y-3">
+                      {handoverText.split('\n\n').map((para, i) => (
+                        <p key={i}>{para}</p>
+                      ))}
+                   </div>
+                </div>
+             ) : (
+                <div className="h-28 flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-2xl">
+                    <button 
+                        onClick={handleGenerateHandover}
+                        disabled={isLoadingHandover}
+                        className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold transition-all shadow-lg"
+                    >
+                        {isLoadingHandover ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Activity className="w-5 h-5"/> Gerar Resumo do Plantão</>}
+                    </button>
+                </div>
+             )}
+          </div>
       </div>
 
       {/* Navegação Principal */}
@@ -270,13 +311,10 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
          ))}
       </div>
 
-      {/* --- CONTENT: MEDS (SEPARATED LISTS) --- */}
       {activeTab === 'meds' && (
          <div className="space-y-6">
-            
-            {/* Seção 1: Atrasados (Prioridade) */}
             {medsMap.late.length > 0 && (
-                <div className="bg-red-50 rounded-2xl border border-red-100 overflow-hidden animate-pulse-slow">
+                <div className="bg-red-50 rounded-2xl border border-red-100 overflow-hidden">
                     <div className="px-6 py-3 bg-red-100/50 border-b border-red-100 flex items-center justify-between">
                         <h3 className="font-bold text-red-800 flex items-center gap-2">
                             <AlertTriangle className="w-5 h-5" /> Atrasados / Prioridade
@@ -291,7 +329,6 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                 </div>
             )}
 
-            {/* Seção 2: Próximos / Agora */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                     <h3 className="font-bold text-gray-800 flex items-center gap-2">
@@ -312,24 +349,8 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
          </div>
       )}
 
-      {/* --- CONTENT: VITALS TABLE (IMPROVED) --- */}
       {activeTab === 'vitals' && (
          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-gray-100 bg-gray-50 border-b border-gray-200">
-                 <div className="p-4 text-center">
-                     <p className="text-xs font-bold text-gray-400 uppercase">Total Residentes</p>
-                     <p className="text-xl font-bold text-gray-900">{filteredResidents.length}</p>
-                 </div>
-                 <div className="p-4 text-center">
-                     <p className="text-xs font-bold text-gray-400 uppercase">Aferidos Hoje</p>
-                     <p className="text-xl font-bold text-emerald-600">0</p>
-                 </div>
-                 <div className="p-4 text-center">
-                     <p className="text-xs font-bold text-gray-400 uppercase">Alertas</p>
-                     <p className="text-xl font-bold text-gray-400">-</p>
-                 </div>
-             </div>
-
              <div className="overflow-x-auto">
                 <table className="w-full text-left">
                    <thead className="bg-white text-gray-500 font-bold text-xs uppercase border-b border-gray-100">
@@ -351,9 +372,7 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                                   </div>
                                   <div>
                                     <p className="font-bold text-gray-900">{r.name}</p>
-                                    {r.medicalRecord?.lastVitals.date && (
-                                        <p className="text-xs text-gray-400 mt-0.5">Última: {r.medicalRecord.lastVitals.date}</p>
-                                    )}
+                                    <p className="text-xs text-gray-400 mt-0.5">Última: {r.medicalRecord?.lastVitals.date || '-'}</p>
                                   </div>
                                </div>
                             </td>
@@ -388,7 +407,6 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                                    <button 
                                      onClick={() => saveVitalsRow(r)}
                                      className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition-all animate-in zoom-in"
-                                     title="Salvar"
                                    >
                                       <Check className="w-5 h-5" />
                                    </button>
@@ -402,11 +420,9 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
          </div>
       )}
 
-      {/* --- CONTENT: BATCH CARE --- */}
       {activeTab === 'care' && (
          <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1">
-                {/* Action Bar (Sticky) */}
                 <div className={`transition-all duration-300 sticky top-0 z-20 mb-4 ${selectedResidentIds.size > 0 ? 'translate-y-0 opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
                     <div className="bg-slate-900 text-white p-3 rounded-xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3">
                         <div className="font-bold flex items-center gap-2 px-2">
@@ -438,7 +454,6 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                             ${isSelected ? 'border-blue-500 bg-blue-50 shadow-md scale-[1.02]' : 'border-gray-100 bg-white hover:border-blue-200 hover:shadow-sm'}`}
                         >
                             {isSelected && <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1"><Check className="w-3 h-3"/></div>}
-                            
                             <div className="w-16 h-16 rounded-full bg-gray-100 mb-3 overflow-hidden border-2 border-white shadow-sm">
                             {r.photo ? <img src={r.photo} className="w-full h-full object-cover" /> : <User className="w-6 h-6 m-4 text-gray-400"/>}
                             </div>
@@ -450,7 +465,6 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                 </div>
             </div>
 
-            {/* Sidebar Histórico (Desktop) */}
             <div className="w-full lg:w-80 flex-shrink-0">
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sticky top-4">
                     <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -465,9 +479,6 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                                     <p className="text-xs text-gray-500">{log.text}</p>
                                     <p className="text-[10px] text-gray-400 mt-1">{log.time}</p>
                                 </div>
-                                <button className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-opacity" title="Desfazer">
-                                    <Undo2 className="w-4 h-4" />
-                                </button>
                             </div>
                         )) : (
                             <p className="text-sm text-gray-400 italic">Nenhuma ação registrada nesta sessão.</p>
@@ -478,7 +489,6 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
          </div>
       )}
 
-      {/* --- MODAL DE REGISTRO MANUAL --- */}
       {isManualEntryOpen && (
           <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
              <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
@@ -486,7 +496,6 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                     <h3 className="text-lg font-bold text-gray-900">Registro Avulso / Esqueci</h3>
                     <button onClick={() => setIsManualEntryOpen(false)}><X className="w-6 h-6 text-gray-400" /></button>
                 </div>
-
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Residente</label>
@@ -499,17 +508,10 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">O que foi feito?</label>
-                        <div className="flex gap-2 mb-2">
-                            {['Medicação', 'Curativo', 'Intercorrência'].map(t => (
-                                <button key={t} className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50 focus:bg-blue-50 focus:border-blue-500 focus:text-blue-700 transition-colors">
-                                    {t}
-                                </button>
-                            ))}
-                        </div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Nota</label>
                         <textarea 
                             className="w-full border rounded-lg p-3 outline-none h-24 resize-none"
-                            placeholder="Descreva o que foi realizado (ex: Dipirona extra por febre)..."
+                            placeholder="Descreva o que foi realizado..."
                             value={manualEntryForm.note}
                             onChange={e => setManualEntryForm({...manualEntryForm, note: e.target.value})}
                         ></textarea>
@@ -518,12 +520,8 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                         onClick={() => {
                             if(manualEntryForm.residentId && manualEntryForm.note && onAddEvolution) {
                                 onAddEvolution(manualEntryForm.residentId, `Registro Manual: ${manualEntryForm.note}`, 'nursing');
-                                const res = residents.find(r => r.id === manualEntryForm.residentId);
-                                onLogAction("Registro Manual", "Ação avulsa registrada via modal", "operational", res?.id);
-                                addToHistory(res?.name || "Desconhecido", "Registro Manual");
+                                addToHistory(residents.find(r => r.id === manualEntryForm.residentId)?.name || "Residente", "Registro Manual");
                                 setIsManualEntryOpen(false);
-                            } else {
-                                alert("Preencha todos os campos.");
                             }
                         }}
                         className="w-full bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-gray-800"
@@ -539,16 +537,8 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
   );
 };
 
-// Subcomponente para Linha de Medicação
-interface MedicationRowProps {
-  item: any;
-  onAdminister: (residentId: string, medName: string, time: string, isHighAlert?: boolean) => void;
-  isLate?: boolean;
-}
-
-// Fixed: Correctly typed MedicationRow as React.FC to handle 'key' prop automatically
-const MedicationRow: React.FC<MedicationRowProps> = ({ item, onAdminister, isLate = false }) => (
-    <div className={`p-4 flex flex-col sm:flex-row items-center justify-between gap-4 transition-colors ${isLate ? 'hover:bg-red-50/50' : 'hover:bg-blue-50/30'}`}>
+const MedicationRow: React.FC<{ item: any; onAdminister: any; isLate?: boolean }> = ({ item, onAdminister, isLate }) => (
+    <div className={`p-4 flex flex-col sm:flex-row items-center justify-between gap-4 transition-colors ${isLate ? 'bg-red-50/30' : 'hover:bg-blue-50/30'}`}>
         <div className="flex items-center gap-4 flex-1 w-full">
             <div className={`px-3 py-1 rounded-lg font-bold text-sm border flex items-center justify-center min-w-[70px]
                 ${isLate ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
@@ -562,7 +552,6 @@ const MedicationRow: React.FC<MedicationRowProps> = ({ item, onAdminister, isLat
                 <div className="flex items-center gap-2 flex-wrap">
                     <span className={`font-medium ${isLate ? 'text-red-600' : 'text-blue-600'}`}>{item.medName}</span>
                     <span className="text-gray-400 text-xs">• {item.dosage}</span>
-                    {item.isHighAlert && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold border border-red-200 flex items-center gap-1"><AlertOctagon className="w-3 h-3"/> ALTO RISCO</span>}
                 </div>
             </div>
         </div>

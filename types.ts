@@ -64,9 +64,11 @@ export interface Resident {
   careLevel: 1 | 2 | 3;
   admissionDate: string;
   feeConfig?: FeeConfig; 
-  medicalRecord?: MedicalRecord; // Medical record costuma ser 1-para-1, mantemos aqui por simplicidade
+  medicalRecord?: MedicalRecord; 
   benefitValue?: number; 
   created_at?: string;
+  prescriptions?: Prescription[];
+  stock?: StockItem[];
 }
 
 export interface MedicalRecord {
@@ -99,6 +101,16 @@ export interface Prescription {
   isHighAlert?: boolean; 
 }
 
+export interface MedicationLog {
+  id: string;
+  prescriptionId: string;
+  administeredAt: string; // ISO String
+  administeredBy: string; // Nome ou ID do usuário
+  status: 'administered' | 'refused';
+  notes?: string;
+  scheduledTime: string; // O horário que estava previsto (ex: '08:00')
+}
+
 export interface StockItem {
   id: string;
   residentId: string; // FK
@@ -121,6 +133,22 @@ export interface Evolution {
   content: string;
   type: 'nursing' | 'medical' | 'physio' | 'nutrition';
   attachments?: string[]; 
+  isHandoverRelevant?: boolean; 
+}
+
+export type IncidentType = 'queda' | 'agressão' | 'lesão' | 'outro';
+export type IncidentSeverity = 'baixa' | 'média' | 'alta';
+
+export interface IncidentReport {
+  id: string;
+  residentId: string;
+  type: IncidentType;
+  severity: IncidentSeverity;
+  description: string;
+  photos: string[]; // URLs
+  familyNotified: boolean;
+  date: string; // ISO String
+  author: string;
 }
 
 export interface AuditLog {

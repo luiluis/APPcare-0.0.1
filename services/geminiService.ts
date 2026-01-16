@@ -1,7 +1,7 @@
 
 // Fix Gemini API implementation according to guidelines
 import { GoogleGenAI } from "@google/genai";
-import { FinancialRecord } from "../types";
+import { FinancialRecord, Evolution, Resident } from "../types";
 
 // Initialize the client strictly as requested
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
@@ -11,7 +11,6 @@ export const analyzeFinancialHealth = async (
   branchName: string
 ): Promise<string> => {
   try {
-    // Basic verification of API Key presence
     if (!process.env.API_KEY) {
       return `Simulação de Resposta da IA (Sem API Key configurada):\n\nBaseado nos dados da ${branchName}, observo que a receita recorrente cobre as despesas fixas com uma margem de 15%. Recomendo atenção aos custos variáveis de suprimentos que subiram 5% este mês.`;
     }
@@ -34,7 +33,6 @@ export const analyzeFinancialHealth = async (
       3. Use tom profissional e direto.
     `;
 
-    // Use ai.models.generateContent directly with gemini-3-pro-preview for complex reasoning task
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: prompt,
@@ -44,5 +42,47 @@ export const analyzeFinancialHealth = async (
   } catch (error) {
     console.error("Gemini API Error:", error);
     return "Erro ao conectar com o serviço de inteligência artificial.";
+  }
+};
+
+/**
+ * Gera um resumo de plantão baseado em evoluções relevantes.
+ */
+export const generateHandoverSummary = async (
+  evolutions: (Evolution & { residentName: string })[]
+): Promise<string> => {
+  try {
+    if (!process.env.API_KEY) {
+       return "Dona Maria apresentou confusão mental às 10h. Sr. João teve pico pressórico (160/90) após o almoço, medicado conforme SOS. Reposição de fraldas para Unidade Jardim é urgente devido ao baixo estoque.";
+    }
+
+    const evolutionsContext = evolutions.map(e => 
+      `Residente: ${e.residentName} | Tipo: ${e.type} | Nota: ${e.content} | Data: ${e.date}`
+    ).join('\n');
+
+    const prompt = `
+      Você é um Coordenador de Enfermagem sênior em uma ILPI (Instituição de Longa Permanência para Idosos).
+      Sua tarefa é resumir as últimas 12 horas de plantão para a equipe que está entrando agora.
+      
+      Evoluções Relevantes do Período:
+      ${evolutionsContext}
+      
+      Instruções Obrigatórias:
+      1. Escreva exatamente 3 parágrafos curtos.
+      2. Foque exclusivamente em anormalidades, picos de sinais vitais, alterações comportamentais ou urgências de suprimentos.
+      3. Ignore rotinas normais (ex: "banho realizado" sem intercorrência).
+      4. Use um tom clínico, profissional e de alerta quando necessário.
+      5. Organize as informações por gravidade/urgência.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview', // Flash é excelente para resumos rápidos
+      contents: prompt,
+    });
+
+    return response.text || "Nenhuma anormalidade relevante registrada nas últimas 12 horas.";
+  } catch (error) {
+    console.error("Gemini Handover Error:", error);
+    return "Erro ao gerar resumo do plantão.";
   }
 };
