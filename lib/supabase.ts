@@ -1,24 +1,26 @@
+
 import { createClient } from '@supabase/supabase-js';
-
-// Estes valores viriam das suas variáveis de ambiente (.env)
-// Por enquanto, deixamos placeholders para indicar onde configurar
-const supabaseUrl = process.env.SUPABASE_URL || 'https://sua-url-do-projeto.supabase.co';
-const supabaseKey = process.env.SUPABASE_ANON_KEY || 'sua-chave-anonima';
-
-export const supabase = createClient(supabaseUrl, supabaseKey);
+import { config } from './config';
 
 /**
- * Exemplo de como seria a busca de dados reais vs Mock:
+ * CLIENTE SUPABASE
+ * Inicializado com valores centralizados do lib/config.ts.
+ */
+const supabaseUrl = config.supabase.url;
+const supabaseKey = config.supabase.anonKey;
+
+// Se não houver URL, usamos um placeholder para não quebrar a inicialização do SDK em modo Protótipo
+export const supabase = createClient(
+  supabaseUrl || 'https://sua-url-do-projeto.supabase.co', 
+  supabaseKey || 'sua-chave-anonima'
+);
+
+/**
+ * GUIA DE MIGRAÇÃO:
  * 
- * --- MODO ATUAL (Mock) ---
- * import { MOCK_RESIDENTS } from './constants';
- * const data = MOCK_RESIDENTS;
+ * Para substituir o Mock pelo Banco Real:
+ * No services/dataService.ts, altere as funções de Mutation/Query:
  * 
- * --- MODO SUPABASE (Real) ---
- * const { data, error } = await supabase
- *   .from('residents')
- *   .select('*')
- *   .eq('branch_id', branchId);
- * 
- * A migração é suave e pode ser feita arquivo por arquivo.
+ * Exemplo:
+ * const { data, error } = await supabase.from('residents').select('*');
  */

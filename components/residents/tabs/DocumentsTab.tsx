@@ -1,17 +1,19 @@
 
 import React, { useState } from 'react';
 import { Resident, ResidentDocument, DocumentCategory } from '../../../types';
-import { FileText, Image as ImageIcon, Trash2, Eye, Plus, UploadCloud, X, FileCheck, Stethoscope, UserSquare2 } from 'lucide-react';
+import { FileText, Image as ImageIcon, Trash2, Eye, Plus, UploadCloud, X, FileCheck, Stethoscope, UserSquare2, Loader2 } from 'lucide-react';
+import { dataService } from '../../../services/dataService';
 
 interface DocumentsTabProps {
   resident: Resident;
-  onUpdateResident: (updated: Resident) => void;
+  documents: ResidentDocument[];
+  onUpdateDocuments: (updated: ResidentDocument[]) => void;
 }
 
-export const DocumentsTab: React.FC<DocumentsTabProps> = ({ resident, onUpdateResident }) => {
-  const { documents = [] } = resident;
+export const DocumentsTab: React.FC<DocumentsTabProps> = ({ resident, documents, onUpdateDocuments }) => {
   const [filter, setFilter] = useState<DocumentCategory | 'all'>('all');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   // Upload State
   const [newDocTitle, setNewDocTitle] = useState('');
@@ -19,35 +21,42 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ resident, onUpdateRe
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // --- HANDLERS ---
-  const handleFileUpload = () => {
-    if (!selectedFile || !newDocTitle) return;
+  const handleFileUpload = async () => {
+    if (!selectedFile || !newDocTitle || isProcessing) return;
 
-    // Added residentId to satisfy ResidentDocument interface
-    const newDoc: ResidentDocument = {
-        id: `doc-${Date.now()}`,
-        residentId: resident.id,
-        title: newDocTitle,
-        category: newDocCategory,
-        url: URL.createObjectURL(selectedFile), // Mock URL
-        type: selectedFile.type.startsWith('image/') ? 'image' : 'pdf',
-        createdAt: new Date().toISOString().split('T')[0]
-    };
+    setIsProcessing(true);
+    try {
+        // O dataService agora cuida do upload e da criação do registro
+        const newDoc = await dataService.addDocument(
+            resident.id,
+            newDocTitle,
+            newDocCategory,
+            selectedFile
+        );
 
-    onUpdateResident({
-        ...resident,
-        documents: [...documents, newDoc]
-    });
-
-    // Reset
-    setIsUploadOpen(false);
-    setNewDocTitle('');
-    setSelectedFile(null);
+        onUpdateDocuments([...documents, newDoc]);
+        setIsUploadOpen(false);
+        setNewDocTitle('');
+        setSelectedFile(null);
+    } catch (error: any) {
+        alert(error.message || "Erro ao fazer upload do documento.");
+    } finally {
+        setIsProcessing(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+      if (isProcessing) return;
       if (confirm('Tem certeza que deseja excluir este documento?')) {
-          const updatedDocs = documents.filter(d => d.id !== id);
-          onUpdateResident({ ...resident, documents: updatedDocs });
+          setIsProcessing(true);
+          try {
+              await dataService.deleteDocument(id);
+              onUpdateDocuments(documents.filter(d => d.id !== id));
+          } catch (error: any) {
+              alert("Erro ao excluir documento.");
+          } finally {
+              setIsProcessing(false);
+          }
       }
   };
 
@@ -92,7 +101,8 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ resident, onUpdateRe
            </div>
            <button 
              onClick={() => setIsUploadOpen(true)}
-             className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl shadow-md hover:bg-blue-700 transition-colors w-full sm:w-auto justify-center"
+             disabled={isProcessing}
+             className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl shadow-md hover:bg-blue-700 transition-colors w-full sm:w-auto justify-center disabled:opacity-50"
            >
                <Plus className="w-5 h-5" /> Novo Documento
            </button>
@@ -150,14 +160,15 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ resident, onUpdateRe
                <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
                    <div className="flex justify-between items-center mb-6">
                        <h3 className="text-lg font-bold text-gray-900">Novo Documento</h3>
-                       <button onClick={() => setIsUploadOpen(false)}><X className="w-6 h-6 text-gray-400" /></button>
+                       <button onClick={() => !isProcessing && setIsUploadOpen(false)} disabled={isProcessing}><X className="w-6 h-6 text-gray-400" /></button>
                    </div>
 
                    <div className="space-y-4">
                        <div>
                            <label className="block text-sm font-bold text-gray-700 mb-1">Título do Documento</label>
                            <input 
-                             className="w-full border border-gray-300 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                             disabled={isProcessing}
+                             className="w-full border border-gray-300 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
                              placeholder="Ex: Contrato 2023 Assinado"
                              value={newDocTitle}
                              onChange={e => setNewDocTitle(e.target.value)}
@@ -167,7 +178,8 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ resident, onUpdateRe
                        <div>
                            <label className="block text-sm font-bold text-gray-700 mb-1">Categoria</label>
                            <select 
-                             className="w-full border border-gray-300 rounded-lg px-4 py-2.5 outline-none bg-white"
+                             disabled={isProcessing}
+                             className="w-full border border-gray-300 rounded-lg px-4 py-2.5 outline-none bg-white disabled:bg-gray-50"
                              value={newDocCategory}
                              onChange={e => setNewDocCategory(e.target.value as any)}
                            >
@@ -180,9 +192,10 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ resident, onUpdateRe
 
                        <div>
                            <label className="block text-sm font-bold text-gray-700 mb-1">Arquivo</label>
-                           <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:bg-gray-50 transition-colors relative cursor-pointer">
+                           <div className={`border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:bg-gray-50 transition-colors relative cursor-pointer ${isProcessing ? 'opacity-50' : ''}`}>
                                <input 
                                  type="file" 
+                                 disabled={isProcessing}
                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                  onChange={e => e.target.files && setSelectedFile(e.target.files[0])}
                                  accept="image/*,.pdf"
@@ -204,10 +217,14 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ resident, onUpdateRe
 
                        <button 
                          onClick={handleFileUpload}
-                         disabled={!selectedFile || !newDocTitle}
-                         className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                         disabled={!selectedFile || !newDocTitle || isProcessing}
+                         className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md disabled:opacity-50 disabled:cursor-not-allowed mt-2 flex items-center justify-center gap-2"
                        >
-                           Salvar Documento
+                           {isProcessing ? (
+                               <><Loader2 className="w-5 h-5 animate-spin" /> Processando...</>
+                           ) : (
+                               'Salvar Documento'
+                           )}
                        </button>
                    </div>
                </div>
