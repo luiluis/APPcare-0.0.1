@@ -1,17 +1,19 @@
 
 import React, { useState } from 'react';
 import { Resident, Prescription } from '../../../types';
-import { CheckSquare, Clock, AlertCircle, Pill, XCircle, Plus, Trash2, Edit2, X, AlertOctagon, ShieldCheck } from 'lucide-react';
+import { CheckSquare, Clock, AlertCircle, Pill, XCircle, Plus, Trash2, Edit2, X, AlertOctagon, ShieldCheck, Loader2 } from 'lucide-react';
 import { SecurityPinModal } from '../../modals/SecurityPinModal';
+import { dataService } from '../../../services/dataService';
 
 interface PrescriptionTabProps {
   resident: Resident;
-  onUpdateResident: (updated: Resident) => void;
+  prescriptions: Prescription[];
+  onUpdatePrescriptions: (updated: Prescription[]) => void;
 }
 
-export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUpdateResident }) => {
-  const { prescriptions } = resident;
+export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, prescriptions, onUpdatePrescriptions }) => {
   const [checkedItems, setCheckedItems] = useState<Record<string, {status: 'checked' | 'missed', reason?: string}>>({});
+  const [isProcessing, setIsProcessing] = useState(false);
   
   // States para Modais
   const [exceptionModal, setExceptionModal] = useState<{isOpen: boolean, itemId: string | null}>({isOpen: false, itemId: null});
@@ -23,10 +25,8 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
   // Security Modal State
   const [pinModal, setPinModal] = useState<{isOpen: boolean, pendingItem: any | null}>({isOpen: false, pendingItem: null});
 
-  // Form State para Nova/Edit Prescrição
-  // Added residentId to satisfy Prescription interface
-  const initialFormState: Prescription = { 
-    id: '', 
+  // Form State
+  const initialFormState: Omit<Prescription, 'id'> = { 
     residentId: resident.id, 
     medication: '', 
     dosage: '', 
@@ -35,10 +35,11 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
     active: true, 
     isHighAlert: false 
   };
-  const [form, setForm] = useState(initialFormState);
-  const [formTimesString, setFormTimesString] = useState(''); // Helper for input
+  
+  const [form, setForm] = useState<Omit<Prescription, 'id'>>(initialFormState);
+  const [formTimesString, setFormTimesString] = useState('');
 
-  // --- CRUD LOGIC ---
+  // --- CRUD LOGIC (ASYNC) ---
 
   const handleOpenAdd = () => {
     setEditingItem(null);
@@ -49,41 +50,68 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
 
   const handleOpenEdit = (item: Prescription) => {
     setEditingItem(item);
-    setForm(item);
+    setForm({
+        residentId: item.residentId,
+        medication: item.medication,
+        dosage: item.dosage,
+        times: item.times,
+        instructions: item.instructions,
+        active: item.active,
+        isHighAlert: item.isHighAlert
+    });
     setFormTimesString(item.times.join(', '));
     setIsEditModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    if (isProcessing) return;
     if (confirm('Tem certeza que deseja remover esta prescrição?')) {
-       const updatedPrescriptions = (prescriptions || []).filter(p => p.id !== id);
-       onUpdateResident({ ...resident, prescriptions: updatedPrescriptions });
+       setIsProcessing(true);
+       try {
+          await dataService.deletePrescription(id);
+          const updated = prescriptions.filter(p => p.id !== id);
+          onUpdatePrescriptions(updated);
+       } catch (error: any) {
+          alert(error.message || "Erro ao deletar prescrição.");
+       } finally {
+          setIsProcessing(false);
+       }
     }
   };
 
-  const handleSavePrescription = () => {
-    const timesArray = formTimesString.split(',').map(t => t.trim()).filter(t => t !== '');
+  const handleSavePrescription = async () => {
+    if (isProcessing) return;
     
-    let updatedPrescriptions = [...(prescriptions || [])];
+    const timesArray = formTimesString.split(',')
+      .map(t => t.trim())
+      .filter(t => /^([01]\d|2[0-3]):?([0-5]\d)$/.test(t));
 
-    if (editingItem) {
-        // Update
-        updatedPrescriptions = updatedPrescriptions.map(p => p.id === editingItem.id ? {
-            ...form,
-            id: editingItem.id,
-            times: timesArray
-        } : p);
-    } else {
-        // Create
-        updatedPrescriptions.push({
-            ...form,
-            id: `presc-${Date.now()}`,
-            times: timesArray
-        });
+    if (timesArray.length === 0) {
+      alert("Por favor, insira pelo menos um horário válido (HH:MM).");
+      return;
     }
 
-    onUpdateResident({ ...resident, prescriptions: updatedPrescriptions });
-    setIsEditModalOpen(false);
+    setIsProcessing(true);
+    try {
+        if (editingItem) {
+            const updated = await dataService.updatePrescription(editingItem.id, {
+                ...form,
+                times: timesArray
+            });
+            onUpdatePrescriptions(prescriptions.map(p => p.id === updated.id ? updated : p));
+        } else {
+            const created = await dataService.addPrescription({
+                ...form,
+                times: timesArray
+            });
+            onUpdatePrescriptions([...prescriptions, created]);
+        }
+        setIsEditModalOpen(false);
+    } catch (error: any) {
+        alert(error.message || "Erro ao salvar prescrição.");
+    } finally {
+        setIsProcessing(false);
+    }
   };
 
   // --- CHECK LOGIC ---
@@ -125,7 +153,7 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
     }))
   ).sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
 
-  const inputStyle = "w-full border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none bg-white transition-all";
+  const inputStyle = "w-full border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none bg-white transition-all disabled:bg-gray-50";
   const labelStyle = "block text-sm font-semibold text-gray-700 mb-1.5";
 
   return (
@@ -142,13 +170,14 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
          </div>
          <button 
            onClick={handleOpenAdd}
-           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 transition-colors"
+           disabled={isProcessing}
+           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 transition-colors disabled:opacity-50"
          >
            <Plus className="w-4 h-4" /> Adicionar Remédio
          </button>
       </div>
 
-      {(!prescriptions || prescriptions.length === 0) && (
+      {prescriptions.length === 0 && !isProcessing && (
         <div className="p-12 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
           <Pill className="w-10 h-10 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 font-medium">Nenhuma prescrição cadastrada.</p>
@@ -157,19 +186,16 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
 
       {/* Timeline */}
       <div className="relative border-l-2 border-gray-200 ml-4 space-y-8 py-2">
-        {timelineEvents.map((item, idx) => {
+        {timelineEvents.map((item) => {
           const state = checkedItems[item.uniqueId];
           const isChecked = state?.status === 'checked';
           const isMissed = state?.status === 'missed';
-          const isLate = !state && item.scheduledTime < "10:00"; 
 
           return (
             <div key={item.uniqueId} className="relative pl-8 group">
-              {/* Bullet do Timeline */}
               <div className={`absolute -left-[9px] top-4 w-4 h-4 rounded-full border-2 
                 ${isChecked ? 'bg-emerald-500 border-emerald-500' : 
-                  isMissed ? 'bg-red-500 border-red-500' : 
-                  isLate ? 'bg-white border-orange-400' : 'bg-white border-gray-300'}`}>
+                  isMissed ? 'bg-red-500 border-red-500' : 'bg-white border-gray-300'}`}>
               </div>
 
               <div className={`p-5 rounded-xl border transition-all duration-200 flex flex-col lg:flex-row gap-4 lg:items-center justify-between group
@@ -178,7 +204,6 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
                   'bg-white border-gray-200 shadow-sm hover:shadow-md'}
               `}>
                 
-                {/* Info Horário e Remédio */}
                 <div className="flex items-start gap-4 flex-1">
                    <div className={`p-3 rounded-lg font-bold text-lg text-center min-w-[80px] 
                      ${isChecked ? 'bg-emerald-100 text-emerald-700' : 
@@ -188,7 +213,7 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
                    <div className="flex-1">
                       <div className="flex justify-between items-start">
                          <div>
-                            <h4 className={`text-lg font-bold flex items-center gap-2 ${isChecked || isMissed ? 'text-gray-900' : 'text-gray-900'}`}>
+                            <h4 className="text-lg font-bold flex items-center gap-2 text-gray-900">
                                 {item.medication}
                                 {item.isHighAlert && (
                                     <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] uppercase font-bold rounded-full border border-red-200 flex items-center gap-1">
@@ -198,10 +223,9 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
                             </h4>
                             <p className="text-gray-600 font-medium">{item.dosage}</p>
                          </div>
-                         {/* Edit Controls (Only visible on hover) */}
                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                            <button onClick={() => handleOpenEdit(item)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 className="w-4 h-4"/></button>
-                            <button onClick={() => handleDelete(item.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4"/></button>
+                            <button onClick={() => handleOpenEdit(item)} disabled={isProcessing} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 className="w-4 h-4"/></button>
+                            <button onClick={() => handleDelete(item.id)} disabled={isProcessing} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4"/></button>
                          </div>
                       </div>
 
@@ -218,21 +242,21 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
                    </div>
                 </div>
 
-                {/* Ações */}
                 <div className="flex flex-col items-end gap-2">
                    {!state ? (
                      <div className="flex gap-2">
                        <button 
                          onClick={() => openException(item.uniqueId)}
-                         className="px-4 py-3 rounded-xl font-bold text-red-600 border border-red-200 hover:bg-red-50 text-sm transition-colors"
-                         title="Não Administrado"
+                         disabled={isProcessing}
+                         className="px-4 py-3 rounded-xl font-bold text-red-600 border border-red-200 hover:bg-red-50 text-sm transition-colors disabled:opacity-50"
                        >
                          <XCircle className="w-5 h-5" />
                        </button>
                        <button 
                          onClick={() => handleClickCheck(item)}
+                         disabled={isProcessing}
                          className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-white shadow-md transition-all 
-                           ${item.isHighAlert ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-200' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'}`}
+                           ${item.isHighAlert ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                        >
                          {item.isHighAlert && <ShieldCheck className="w-4 h-4"/>} Confirmar Dose
                        </button>
@@ -260,7 +284,7 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full">
               <div className="flex justify-between items-center mb-6">
                  <h3 className="text-lg font-bold text-gray-900">{editingItem ? 'Editar Prescrição' : 'Nova Prescrição'}</h3>
-                 <button onClick={() => setIsEditModalOpen(false)}><X className="w-6 h-6 text-gray-400" /></button>
+                 <button onClick={() => !isProcessing && setIsEditModalOpen(false)} disabled={isProcessing}><X className="w-6 h-6 text-gray-400" /></button>
               </div>
               
               <div className="space-y-4">
@@ -269,6 +293,7 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
                     <input 
                       className={inputStyle} 
                       placeholder="Ex: Losartana"
+                      disabled={isProcessing}
                       value={form.medication}
                       onChange={e => setForm({...form, medication: e.target.value})}
                     />
@@ -279,15 +304,17 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
                         <input 
                             className={inputStyle} 
                             placeholder="Ex: 50mg"
+                            disabled={isProcessing}
                             value={form.dosage}
                             onChange={e => setForm({...form, dosage: e.target.value})}
                         />
                     </div>
                     <div>
-                        <label className={labelStyle}>Horários (sep. por vírgula)</label>
+                        <label className={labelStyle}>Horários (08:00, 20:00)</label>
                         <input 
                             className={inputStyle} 
-                            placeholder="08:00, 20:00"
+                            placeholder="HH:MM, HH:MM"
+                            disabled={isProcessing}
                             value={formTimesString}
                             onChange={e => setFormTimesString(e.target.value)}
                         />
@@ -298,12 +325,13 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
                      <input 
                         type="checkbox" 
                         id="highAlert" 
+                        disabled={isProcessing}
                         className="w-5 h-5 text-red-600 rounded" 
                         checked={form.isHighAlert || false}
                         onChange={e => setForm({...form, isHighAlert: e.target.checked})}
                      />
                      <label htmlFor="highAlert" className="text-sm font-bold text-red-800 cursor-pointer flex items-center gap-2">
-                        <AlertOctagon className="w-4 h-4"/> Medicamento de Alto Risco / Controlado
+                        <AlertOctagon className="w-4 h-4"/> Medicamento de Alto Risco
                      </label>
                  </div>
 
@@ -311,20 +339,22 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
                     <label className={labelStyle}>Instruções Especiais</label>
                     <textarea 
                       className={inputStyle} 
-                      placeholder="Ex: Após refeição, amassar..."
+                      placeholder="Ex: Após refeição..."
                       rows={3}
+                      disabled={isProcessing}
                       value={form.instructions || ''}
                       onChange={e => setForm({...form, instructions: e.target.value})}
                     />
                  </div>
                  
                  <div className="pt-4 flex gap-3">
-                    <button onClick={() => setIsEditModalOpen(false)} className="flex-1 py-3 text-gray-600 font-bold hover:bg-gray-100 rounded-xl">Cancelar</button>
+                    <button onClick={() => setIsEditModalOpen(false)} disabled={isProcessing} className="flex-1 py-3 text-gray-600 font-bold hover:bg-gray-100 rounded-xl">Cancelar</button>
                     <button 
                       onClick={handleSavePrescription}
-                      className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md"
+                      disabled={isProcessing}
+                      className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md flex items-center justify-center gap-2 disabled:opacity-70"
                     >
-                       Salvar Prescrição
+                       {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Salvar'}
                     </button>
                  </div>
               </div>
@@ -332,13 +362,13 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
         </div>
       )}
 
-      {/* Modal de Exceção (Justificativa) */}
+      {/* Modal de Exceção */}
       {exceptionModal.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Justificativa Obrigatória</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Justificativa</h3>
               <div className="space-y-2 mb-4">
-                 {['Paciente Recusou', 'Paciente Dormindo', 'Paciente Ausente', 'Suspensão Médica', 'Vômito/Regurgitação'].map(r => (
+                 {['Paciente Recusou', 'Paciente Dormindo', 'Paciente Ausente', 'Suspensão Médica'].map(r => (
                    <button 
                     key={r}
                     onClick={() => setExceptionReason(r)}
@@ -347,38 +377,20 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
                      {r}
                    </button>
                  ))}
-                 <input 
-                   type="text" 
-                   placeholder="Outro motivo..." 
-                   className={inputStyle}
-                   value={exceptionReason}
-                   onChange={e => setExceptionReason(e.target.value)}
-                 />
               </div>
-
               <div className="flex gap-3">
-                 <button onClick={() => setExceptionModal({isOpen: false, itemId: null})} className="flex-1 py-2 text-gray-600 font-bold">Cancelar</button>
-                 <button 
-                   onClick={confirmException}
-                   disabled={!exceptionReason}
-                   className="flex-1 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 disabled:opacity-50"
-                 >
-                   Confirmar
-                 </button>
+                 <button onClick={() => setExceptionModal({isOpen: false, itemId: null})} className="flex-1 py-2 text-gray-600 font-bold">Voltar</button>
+                 <button onClick={confirmException} disabled={!exceptionReason} className="flex-1 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 disabled:opacity-50">Confirmar</button>
               </div>
            </div>
         </div>
       )}
 
-      {/* PIN Modal Component */}
       <SecurityPinModal 
         isOpen={pinModal.isOpen}
         onClose={() => setPinModal({...pinModal, isOpen: false})}
         onConfirm={() => processCheck(pinModal.pendingItem)}
-        title="Medicação de Alto Risco"
-        description="Confirme sua identidade para registrar a administração deste medicamento."
       />
-
     </div>
   );
 };
