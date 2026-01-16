@@ -1,15 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
-import { Resident, Invoice, AuditLog, FeeConfig, Prescription, StockItem, Evolution, ResidentDocument } from '../../types';
-import { BRANCHES } from '../../constants';
-import { ArrowLeft, Activity, Pill, Package, FileText, AlertTriangle, Wallet, Edit, Save, X, Camera, Calendar as CalendarIcon, MapPin, User, Stethoscope, Plus, Droplets, FolderOpen, HeartPulse, Building2 } from 'lucide-react';
-import { ClinicalTab } from './tabs/ClinicalTab';
-import { PersonalDataTab } from './tabs/PersonalDataTab';
-import { PrescriptionTab } from './tabs/PrescriptionTab';
-import { StockTab } from './tabs/StockTab';
-import { EvolutionTab } from './tabs/EvolutionTab';
-import { FinancialTab } from './tabs/FinancialTab';
-import { DocumentsTab } from './tabs/DocumentsTab';
+import { Resident, Invoice, AuditLog, FeeConfig, Prescription, StockItem, Evolution, ResidentDocument } from '../../types.ts';
+import { BRANCHES } from '../../constants.ts';
+import { ArrowLeft, Activity, Pill, Package, FileText, Wallet, Edit, User, FolderOpen, X } from 'lucide-react';
+import { ClinicalTab } from './tabs/ClinicalTab.tsx';
+import { PersonalDataTab } from './tabs/PersonalDataTab.tsx';
+import { PrescriptionTab } from './tabs/PrescriptionTab.tsx';
+import { StockTab } from './tabs/StockTab.tsx';
+import { EvolutionTab } from './tabs/EvolutionTab.tsx';
+import { FinancialTab } from './tabs/FinancialTab.tsx';
+import { DocumentsTab } from './tabs/DocumentsTab.tsx';
 
 interface ResidentProfileProps {
   resident: Resident;
@@ -17,12 +17,12 @@ interface ResidentProfileProps {
   stock: StockItem[];
   evolutions: Evolution[];
   documents: ResidentDocument[];
+  invoices: Invoice[];
   onBack: () => void;
   onUpdateResident: (updated: Resident) => void;
   onUpdatePrescriptions: (updated: Prescription[]) => void;
   onUpdateStock: (updated: StockItem[]) => void;
   onUpdateDocuments: (updated: ResidentDocument[]) => void;
-  invoices: Invoice[];
   onLogAction?: (action: string, details: string, category: AuditLog['category'], residentId?: string) => void;
   onAddEvolution: (resId: string, content: string, type: Evolution['type']) => void;
   onUpdateFee?: (residentId: string, newFeeConfig: FeeConfig, updatePendingInvoices: boolean) => void;
@@ -40,9 +40,7 @@ export const ResidentProfile: React.FC<ResidentProfileProps> = (props) => {
   }, [section]);
   
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [modalTab, setModalTab] = useState<'personal' | 'clinical'>('personal');
   const [editForm, setEditForm] = useState(resident);
-  const [tagInput, setTagInput] = useState('');
 
   const calculateAge = (birthDateString: string) => {
     if (!birthDateString) return 0;
@@ -78,7 +76,7 @@ export const ResidentProfile: React.FC<ResidentProfileProps> = (props) => {
              <div className="flex items-center gap-5 mb-6">
                 <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full text-gray-400"><ArrowLeft/></button>
                 <div className="w-20 h-20 bg-slate-100 rounded-full border shadow-sm overflow-hidden flex-shrink-0">
-                    {resident.photo ? <img src={resident.photo} className="w-full h-full object-cover"/> : <User className="w-10 h-10 m-5 text-slate-300"/>}
+                    {resident.photo ? <img src={resident.photo} className="w-full h-full object-cover" alt={resident.name}/> : <User className="w-10 h-10 m-5 text-slate-300"/>}
                 </div>
                 <div>
                    <div className="flex items-center gap-3">
@@ -105,8 +103,8 @@ export const ResidentProfile: React.FC<ResidentProfileProps> = (props) => {
       <div className="flex-1 min-h-0 overflow-y-auto pb-10">
          {activeTab === 'clinical' && <ClinicalTab resident={resident} onUpdateResident={onUpdateResident} />}
          {activeTab === 'meds' && <PrescriptionTab resident={resident} prescriptions={prescriptions} onUpdatePrescriptions={props.onUpdatePrescriptions} />}
-         {activeTab === 'stock' && <StockTab resident={resident} stock={stock} onUpdateStock={props.onUpdateStock} />}
-         {activeTab === 'evolution' && <EvolutionTab resident={resident} evolutions={evolutions} onAddEvolution={onAddEvolution} />}
+         {activeTab === 'stock' && <StockTab resident={{...resident, stock}} onUpdateResident={onUpdateResident} />}
+         {activeTab === 'evolution' && <EvolutionTab resident={{...resident, evolutions}} onAddEvolution={onAddEvolution} />}
          {activeTab === 'personal' && <PersonalDataTab resident={resident} />}
          {activeTab === 'finance' && <FinancialTab resident={resident} invoices={invoices} onUpdateResident={onUpdateResident} onUpdateFee={onUpdateFee} />}
          {activeTab === 'docs' && <DocumentsTab resident={resident} documents={documents} onUpdateDocuments={props.onUpdateDocuments} />}

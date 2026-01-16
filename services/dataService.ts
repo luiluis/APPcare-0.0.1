@@ -8,13 +8,13 @@ import {
   MOCK_INVOICES,
   MOCK_STAFF,
   BRANCHES
-} from '../constants';
+} from '../constants.ts';
 import { 
   Resident, Prescription, StockItem, Evolution, 
   ResidentDocument, Invoice, Staff, Branch, DocumentCategory,
   MedicationLog, IncidentReport
-} from '../types';
-import { storageService } from './storageService';
+} from '../types.ts';
+import { storageService } from './storageService.ts';
 
 /**
  * ESTADO LOCAL (Simulando tabelas do Banco de Dados)
@@ -43,6 +43,11 @@ const simulateNetwork = async <T>(data: T, errorChance = 0.05): Promise<T> => {
 export const dataService = {
   // --- QUERIES ---
   getResidents: async () => simulateNetwork(db_residents, 0.02),
+  getResidentById: async (id: string) => {
+    const res = db_residents.find(r => r.id === id);
+    if (!res) throw new Error("Residente não encontrado.");
+    return simulateNetwork(res, 0);
+  },
   getPrescriptionsByResident: async (resId: string) => simulateNetwork(db_prescriptions.filter(p => p.residentId === resId), 0),
   getStockByResident: async (resId: string) => simulateNetwork(db_stock.filter(s => s.residentId === resId), 0),
   getEvolutionsByResident: async (resId: string) => simulateNetwork(db_evolutions.filter(e => e.residentId === resId), 0),
