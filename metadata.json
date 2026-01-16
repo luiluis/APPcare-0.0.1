@@ -1,0 +1,5 @@
+{
+  "name": "AppCare ERP Prototype",
+  "description": "A centralized ERP dashboard for nursing homes (Matriz & Filial) focusing on financial health, resident management, and staff oversight. Includes AI-powered financial analysis.",
+  "requestFramePermissions": []
+}
