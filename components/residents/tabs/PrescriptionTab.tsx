@@ -24,7 +24,17 @@ export const PrescriptionTab: React.FC<PrescriptionTabProps> = ({ resident, onUp
   const [pinModal, setPinModal] = useState<{isOpen: boolean, pendingItem: any | null}>({isOpen: false, pendingItem: null});
 
   // Form State para Nova/Edit Prescrição
-  const initialFormState: Prescription = { id: '', medication: '', dosage: '', times: [], instructions: '', active: true, isHighAlert: false };
+  // Added residentId to satisfy Prescription interface
+  const initialFormState: Prescription = { 
+    id: '', 
+    residentId: resident.id, 
+    medication: '', 
+    dosage: '', 
+    times: [], 
+    instructions: '', 
+    active: true, 
+    isHighAlert: false 
+  };
   const [form, setForm] = useState(initialFormState);
   const [formTimesString, setFormTimesString] = useState(''); // Helper for input
 

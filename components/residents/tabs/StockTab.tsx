@@ -14,7 +14,17 @@ export const StockTab: React.FC<StockTabProps> = ({ resident, onUpdateResident }
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<StockItem | null>(null);
 
-  const initialFormState: StockItem = { id: '', name: '', category: 'hygiene', quantity: 0, unit: 'unidades', minThreshold: 5, avgConsumption: '' };
+  // Added residentId to satisfy StockItem interface
+  const initialFormState: StockItem = { 
+    id: '', 
+    residentId: resident.id,
+    name: '', 
+    category: 'hygiene', 
+    quantity: 0, 
+    unit: 'unidades', 
+    minThreshold: 5, 
+    avgConsumption: '' 
+  };
   const [form, setForm] = useState<StockItem>(initialFormState);
 
   // --- ACTIONS ---

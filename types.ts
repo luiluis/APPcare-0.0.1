@@ -30,14 +30,16 @@ export interface FeeConfig {
   paymentDay: number;         
 }
 
-// --- DOCUMENT MANAGEMENT ---
+// --- ENTIDADES RELACIONAIS ---
+
 export type DocumentCategory = 'contract' | 'identity' | 'medical' | 'other';
 
 export interface ResidentDocument {
   id: string;
+  residentId: string; // FK
   title: string;
   category: DocumentCategory;
-  url: string; // URL do blob ou storage
+  url: string;
   type: 'pdf' | 'image';
   createdAt: string;
   description?: string;
@@ -48,22 +50,15 @@ export interface Resident {
   name: string;
   photo?: string;
   age: number;
-  birthDate?: string; // Novo campo para cálculo automático
+  birthDate?: string;
   branchId: string;
   status: 'Ativo' | 'Hospitalizado' | 'Inativo';
   careLevel: 1 | 2 | 3;
   admissionDate: string;
-  
   feeConfig?: FeeConfig; 
-
-  medicalRecord?: MedicalRecord;
-  prescriptions?: Prescription[];
-  stock?: StockItem[];
-  evolutions?: Evolution[];
-  documents?: ResidentDocument[];
-  created_at?: string;
-  
+  medicalRecord?: MedicalRecord; // Medical record costuma ser 1-para-1, mantemos aqui por simplicidade
   benefitValue?: number; 
+  created_at?: string;
 }
 
 export interface MedicalRecord {
@@ -87,6 +82,7 @@ export interface MedicalRecord {
 
 export interface Prescription {
   id: string;
+  residentId: string; // FK
   medication: string;
   dosage: string;
   times: string[];
@@ -95,31 +91,22 @@ export interface Prescription {
   isHighAlert?: boolean; 
 }
 
-export interface MedicationLog {
-  id: string;
-  prescriptionId: string;
-  residentId: string;
-  time: string;
-  status: 'checked' | 'missed' | 'pending';
-  justification?: string;
-  administeredBy: string;
-  timestamp: string;
-}
-
 export interface StockItem {
   id: string;
+  residentId: string; // FK
   name: string;
   category: 'hygiene' | 'medication' | 'other';
   quantity: number;
   unit: string;
   minThreshold: number;
   avgConsumption?: string;
-  status?: 'ok' | 'low' | 'ordered'; // Status logístico real
+  status?: 'ok' | 'low' | 'ordered';
   lastOrderDate?: string;
 }
 
 export interface Evolution {
   id: string;
+  residentId: string; // FK
   date: string;
   author: string;
   role: string;

@@ -22,8 +22,10 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ resident, onUpdateRe
   const handleFileUpload = () => {
     if (!selectedFile || !newDocTitle) return;
 
+    // Added residentId to satisfy ResidentDocument interface
     const newDoc: ResidentDocument = {
         id: `doc-${Date.now()}`,
+        residentId: resident.id,
         title: newDocTitle,
         category: newDocCategory,
         url: URL.createObjectURL(selectedFile), // Mock URL
