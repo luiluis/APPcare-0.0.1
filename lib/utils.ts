@@ -104,3 +104,24 @@ export const getLastDayOfMonth = (): string => {
   const date = new Date();
   return new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().split('T')[0];
 };
+
+/**
+ * Remove acentos e caracteres especiais de uma string, substituindo espaços por underline.
+ * Ex: "São Paulo" -> "Sao_Paulo"
+ */
+export const sanitizeString = (str: string): string => {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+    .replace(/[^a-zA-Z0-9 ]/g, "")   // Remove caracteres especiais
+    .trim()
+    .replace(/\s+/g, "_");           // Substitui espaços por underline
+};
+
+/**
+ * Gera um caminho estruturado para armazenamento de arquivos.
+ * Ex: 'Matriz/Enfermagem/Ana_Souza/Contratos'
+ */
+export const generateStoragePath = (branch: string, role: string, name: string, category: string): string => {
+  return `${sanitizeString(branch)}/${sanitizeString(role)}/${sanitizeString(name)}/${sanitizeString(category)}`;
+};

@@ -13,10 +13,8 @@ import { ResidentsListPage } from './pages/ResidentsListPage.tsx';
 import { ResidentProfilePage } from './pages/ResidentProfilePage.tsx';
 import { FinancePage } from './pages/FinancePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
-
-// Placeholder Imports para RH
-const StaffListPage = () => <div className="p-10 text-center text-gray-500">Módulo de Equipe (Em Construção)</div>;
-const StaffProfilePage = () => <div className="p-10 text-center text-gray-500">Perfil do Colaborador (Em Construção)</div>;
+import { StaffListPage } from './pages/StaffListPage.tsx';
+import { StaffProfilePage } from './pages/StaffProfilePage.tsx';
 
 function App() {
   const { isAuthenticated } = useAuth();

@@ -12,9 +12,13 @@ export const storageService = {
    * Faz o upload de um arquivo e retorna sua URL pública.
    * @param file O arquivo vindo do input type="file"
    * @param bucket O nome da pasta/bucket no storage (ex: 'documents', 'profiles')
+   * @param path (Opcional) Caminho estruturado dentro do bucket (ex: 'Matriz/RH/Ana')
    */
-  uploadFile: async (file: File, bucket: string): Promise<string> => {
+  uploadFile: async (file: File, bucket: string, path?: string): Promise<string> => {
     console.log(`[Storage] Iniciando upload de "${file.name}" para o bucket "${bucket}"...`);
+    if (path) {
+      console.log(`[Storage] Caminho estruturado: ${path}/${file.name}`);
+    }
     
     // Simula latência de rede (maior que o DB, pois arquivos são pesados)
     await simulateDelay(1500);

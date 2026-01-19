@@ -14,7 +14,7 @@ import {
 import { 
   Resident, Prescription, StockItem, Evolution, 
   ResidentDocument, Invoice, Staff, Branch, DocumentCategory,
-  MedicationLog, IncidentReport, StaffDocument, StaffIncident
+  MedicationLog, IncidentReport, StaffDocument, StaffIncident, StaffDocumentCategory
 } from '../types.ts';
 import { storageService } from './storageService.ts';
 
@@ -179,5 +179,28 @@ export const dataService = {
     };
     db_staff_incidents.push(newIncident);
     return simulateNetwork(newIncident);
+  },
+
+  addStaffDocument: async (staffId: string, title: string, category: StaffDocumentCategory, file: File, expirationDate?: string, customPath?: string): Promise<StaffDocument> => {
+    // Passa o customPath para o serviço de storage
+    const fileUrl = await storageService.uploadFile(file, 'staff-documents', customPath);
+    
+    const newDoc: StaffDocument = {
+      id: `sdoc-${Date.now()}`,
+      staffId,
+      title,
+      category,
+      url: fileUrl,
+      type: file.type.startsWith('image/') ? 'image' : 'pdf',
+      createdAt: new Date().toISOString().split('T')[0],
+      expirationDate
+    };
+    db_staff_documents.push(newDoc);
+    return simulateNetwork(newDoc);
+  },
+
+  deleteStaffDocument: async (id: string): Promise<boolean> => {
+    db_staff_documents = db_staff_documents.filter(d => d.id !== id);
+    return simulateNetwork(true);
   }
 };
