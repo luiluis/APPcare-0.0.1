@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  LayoutDashboard, Users, Wallet, ClipboardCheck, History, LogOut, Menu, Activity, X 
+  LayoutDashboard, Users, Wallet, ClipboardCheck, History, LogOut, Menu, Activity, X, Briefcase
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.tsx';
 import { useData } from '../../contexts/DataContext.tsx';
@@ -19,6 +19,7 @@ export const MainLayout: React.FC = () => {
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/rotina', label: 'Rotina Diária', icon: ClipboardCheck },
     { path: '/residentes', label: 'Residentes', icon: Users },
+    { path: '/rh', label: 'Equipe', icon: Briefcase },
     { path: '/financeiro', label: 'Financeiro', icon: Wallet },
   ];
 
@@ -37,7 +38,7 @@ export const MainLayout: React.FC = () => {
               key={item.path} 
               to={item.path} 
               className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 
-                ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                ${location.pathname.startsWith(item.path) && (item.path !== '/' || location.pathname === '/') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
             >
               <item.icon className="w-5 h-5" />
               <span className="font-medium">{item.label}</span>
@@ -110,7 +111,7 @@ export const MainLayout: React.FC = () => {
              <nav className="space-y-2">
                 {navItems.map((item) => (
                   <Link key={item.path} to={item.path} onClick={() => setIsMobileSidebarOpen(false)} className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 
-                    ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>
+                    ${location.pathname.startsWith(item.path) && (item.path !== '/' || location.pathname === '/') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>
                     <item.icon className="w-5 h-5" />
                     <span className="font-medium">{item.label}</span>
                   </Link>

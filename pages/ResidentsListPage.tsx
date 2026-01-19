@@ -1,51 +1,22 @@
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ResidentList } from '../components/residents/ResidentList.tsx';
 import { IncidentReportModal } from '../components/modals/IncidentReportModal.tsx';
-import { dataService } from '../services/dataService.ts';
 import { useData } from '../contexts/DataContext.tsx';
 import { BRANCHES } from '../constants.ts';
-import { Resident, IncidentReport } from '../types.ts';
-import { Loader2, AlertCircle, Users, Search } from 'lucide-react';
+import { Resident } from '../types.ts';
+import { Users, Search } from 'lucide-react';
 
 export const ResidentsListPage: React.FC = () => {
   const navigate = useNavigate();
-  const { selectedBranchId, addIncident } = useData();
-
-  // Estados Locais de Dados
-  const [residents, setResidents] = useState<Resident[]>([]);
-  const [incidents, setIncidents] = useState<IncidentReport[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Agora usamos residents e incidents diretamente do Contexto global, já carregados pelo App
+  const { residents, incidents, selectedBranchId, addIncident } = useData();
 
   // Estados de UI
   const [isIncidentModalOpen, setIsIncidentModalOpen] = useState(false);
   const [incidentTarget, setIncidentTarget] = useState<Resident | null>(null);
   const [localSearch, setLocalSearch] = useState('');
-
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Busca paralela de residentes e incidentes para performance
-      const [resData, incData] = await Promise.all([
-        dataService.getResidents(),
-        dataService.getIncidents()
-      ]);
-      setResidents(resData);
-      setIncidents(incData);
-    } catch (err: any) {
-      console.error("Erro ao carregar lista de residentes:", err);
-      setError(err.message || "Não foi possível carregar a lista de residentes.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   // Filtragem combinada (Unidade + Busca por Nome)
   const filteredResidents = useMemo(() => {
@@ -63,37 +34,8 @@ export const ResidentsListPage: React.FC = () => {
 
   const handleSaveIncident = async (data: any) => {
     await addIncident(data);
-    // Recarrega incidentes para atualizar os alertas na lista imediatamente
-    const updatedIncidents = await dataService.getIncidents();
-    setIncidents(updatedIncidents);
+    // Não precisamos recarregar manualmente, o Contexto atualiza o estado incidents
   };
-
-  if (loading && residents.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
-        <p className="text-gray-500 font-medium">Carregando lista de residentes...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-white rounded-2xl p-10 border border-gray-200 text-center shadow-sm max-w-lg mx-auto mt-10">
-        <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-          <AlertCircle className="w-8 h-8" />
-        </div>
-        <h3 className="text-xl font-bold text-gray-900 mb-2">Ops! Algo deu errado</h3>
-        <p className="text-gray-500 mb-6">{error}</p>
-        <button 
-          onClick={loadData}
-          className="px-6 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all"
-        >
-          Tentar Novamente
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

@@ -131,7 +131,7 @@ export interface Evolution {
   author: string;
   role: string;
   content: string;
-  type: 'nursing' | 'medical' | 'physio' | 'nutrition';
+  type: 'nursing' | 'medical' | 'physio' | 'nutrition' | 'handover';
   attachments?: string[]; 
   isHandoverRelevant?: boolean; 
 }
@@ -221,13 +221,84 @@ export interface FinancialRecord {
   created_at?: string;
 }
 
+// --- RH / STAFF MODULE ---
+
 export interface Staff {
   id: string;
   name: string;
-  role: string;
+  role: string; // Usado para permissões do sistema
   branchId: string;
   created_at?: string;
+  photo?: string;
+  active: boolean;
+
+  // Dados Pessoais
+  personalInfo?: {
+    cpf: string;
+    rg: string;
+    birthDate: string;
+    phone: string;
+    email: string;
+    address: string;
+    maritalStatus: 'solteiro' | 'casado' | 'divorciado' | 'viuvo' | 'uniao_estavel';
+    childrenCount: number;
+  };
+
+  // Dados Contratuais
+  contractInfo?: {
+    admissionDate: string;
+    jobTitle: string; // Cargo oficial na carteira
+    department: 'enfermagem' | 'limpeza' | 'cozinha' | 'administrativo' | 'manutencao';
+    scale: '12x36' | '6x1' | '5x2' | 'outra';
+    workShift: 'diurno' | 'noturno';
+  };
+
+  // Financeiro
+  financialInfo?: {
+    baseSalary: number;
+    insalubridadeLevel: 0 | 20 | 40;
+    bankInfo: {
+      banco: string;
+      agencia: string;
+      conta: string;
+      pix?: string;
+    };
+  };
+
+  // Profissional
+  professionalInfo?: {
+    corenNumber?: string;
+    corenState?: string;
+  };
 }
+
+export type StaffDocumentCategory = 'aso' | 'contract' | 'identity' | 'certification' | 'warning' | 'medical' | 'other';
+
+export interface StaffDocument {
+  id: string;
+  staffId: string; // FK
+  title: string;
+  category: StaffDocumentCategory;
+  url: string;
+  type: 'pdf' | 'image';
+  createdAt: string;
+  expirationDate?: string; // Para ASO, Coren, Certificações
+  description?: string;
+}
+
+export type StaffIncidentType = 'advertencia' | 'suspensao' | 'atestado' | 'falta' | 'atraso';
+
+export interface StaffIncident {
+  id: string;
+  staffId: string; // FK
+  type: StaffIncidentType;
+  date: string;
+  description: string;
+  attachmentUrl?: string;
+  createdAt: string;
+}
+
+// --- DTOs ---
 
 export interface CreateInvoiceDTO {
   type: 'income' | 'expense';

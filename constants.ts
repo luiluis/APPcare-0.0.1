@@ -1,5 +1,5 @@
 
-import { Branch, BranchType, Resident, FinancialRecord, Staff, Invoice, InvoiceItem, Prescription, StockItem, Evolution, ResidentDocument } from './types';
+import { Branch, BranchType, Resident, FinancialRecord, Staff, Invoice, InvoiceItem, Prescription, StockItem, Evolution, ResidentDocument, StaffDocument, StaffIncident } from './types';
 
 export const BRANCHES: Branch[] = [
   { id: 'b1', name: 'Casa Repouso Matriz (Centro)', type: BranchType.MATRIZ },
@@ -135,10 +135,158 @@ export const MOCK_DOCUMENTS: ResidentDocument[] = [
 ];
 
 export const MOCK_STAFF: Staff[] = [
-  { id: 'stf-1', name: 'Enf. Ana Souza', role: 'Enfermeiro Chefe', branchId: 'b1' },
-  { id: 'stf-2', name: 'Carlos Lima', role: 'Cuidador', branchId: 'b1' },
-  { id: 'stf-3', name: 'Dr. Pedro', role: 'Médico', branchId: 'b2' },
-  { id: 'stf-4', name: 'Julia Costa', role: 'Cuidador', branchId: 'b2' },
+  {
+    id: 'stf-1',
+    name: 'Enf. Ana Souza',
+    role: 'Enfermeiro Chefe',
+    branchId: 'b1',
+    active: true,
+    photo: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200',
+    personalInfo: {
+      cpf: '123.456.789-00',
+      rg: '12.345.678-9',
+      birthDate: '1985-04-12',
+      phone: '(11) 99876-5432',
+      email: 'ana.souza@appcare.com',
+      address: 'Rua das Flores, 123, Centro',
+      maritalStatus: 'casado',
+      childrenCount: 2
+    },
+    contractInfo: {
+      admissionDate: '2020-03-01',
+      jobTitle: 'Enfermeira Chefe',
+      department: 'enfermagem',
+      scale: '12x36',
+      workShift: 'diurno'
+    },
+    financialInfo: {
+      baseSalary: 4500.00,
+      insalubridadeLevel: 20,
+      bankInfo: {
+        banco: 'Itaú (341)',
+        agencia: '1234',
+        conta: '56789-0',
+        pix: '123.456.789-00'
+      }
+    },
+    professionalInfo: {
+      corenNumber: '123456-SP',
+      corenState: 'SP'
+    }
+  },
+  {
+    id: 'stf-2',
+    name: 'Carlos Lima',
+    role: 'Cuidador',
+    branchId: 'b1',
+    active: true,
+    photo: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=200',
+    personalInfo: {
+      cpf: '234.567.890-11',
+      rg: '23.456.789-0',
+      birthDate: '1990-08-20',
+      phone: '(11) 98765-4321',
+      email: 'carlos.lima@appcare.com',
+      address: 'Av. Paulista, 1000, Apto 50',
+      maritalStatus: 'solteiro',
+      childrenCount: 0
+    },
+    contractInfo: {
+      admissionDate: '2022-06-15',
+      jobTitle: 'Cuidador de Idosos',
+      department: 'enfermagem',
+      scale: '12x36',
+      workShift: 'noturno'
+    },
+    financialInfo: {
+      baseSalary: 1800.00,
+      insalubridadeLevel: 40, // Adicional noturno muitas vezes implica insalubridade máxima dependendo da função
+      bankInfo: {
+        banco: 'Banco do Brasil (001)',
+        agencia: '4321',
+        conta: '98765-X'
+      }
+    },
+    professionalInfo: {
+      corenState: 'SP'
+    }
+  },
+  {
+    id: 'stf-3',
+    name: 'Marta Rocha',
+    role: 'Cozinheira',
+    branchId: 'b2',
+    active: true,
+    personalInfo: {
+      cpf: '345.678.901-22',
+      rg: '34.567.890-1',
+      birthDate: '1978-02-10',
+      phone: '(11) 91234-1234',
+      email: 'marta.cozinha@appcare.com',
+      address: 'Rua do Bosque, 50, Jardim',
+      maritalStatus: 'viuvo',
+      childrenCount: 3
+    },
+    contractInfo: {
+      admissionDate: '2019-01-10',
+      jobTitle: 'Cozinheira Líder',
+      department: 'cozinha',
+      scale: '6x1',
+      workShift: 'diurno'
+    },
+    financialInfo: {
+      baseSalary: 2200.00,
+      insalubridadeLevel: 0,
+      bankInfo: {
+        banco: 'Caixa (104)',
+        agencia: '0987',
+        conta: '1234-5',
+        pix: 'marta@email.com'
+      }
+    }
+  }
+];
+
+export const MOCK_STAFF_DOCUMENTS: StaffDocument[] = [
+  {
+    id: 'sdoc-1',
+    staffId: 'stf-1', // Ana
+    title: 'ASO Periódico 2023',
+    category: 'aso',
+    url: 'https://placehold.co/400x500?text=ASO+VALIDO',
+    type: 'pdf',
+    createdAt: '2023-03-01',
+    expirationDate: '2024-03-01'
+  },
+  {
+    id: 'sdoc-2',
+    staffId: 'stf-2', // Carlos
+    title: 'Carteira de Vacinação',
+    category: 'medical',
+    url: 'https://placehold.co/400x500?text=VACINAS',
+    type: 'image',
+    createdAt: '2022-06-15'
+  }
+];
+
+export const MOCK_STAFF_INCIDENTS: StaffIncident[] = [
+  {
+    id: 'sinc-1',
+    staffId: 'stf-3', // Marta
+    type: 'atestado',
+    date: '2023-09-10',
+    description: 'Atestado médico de 2 dias por gripe forte.',
+    attachmentUrl: 'https://placehold.co/400x500?text=ATESTADO',
+    createdAt: '2023-09-10'
+  },
+  {
+    id: 'sinc-2',
+    staffId: 'stf-2', // Carlos
+    type: 'atraso',
+    date: '2023-10-01',
+    description: 'Atraso de 40min no início do plantão noturno devido a problemas no transporte.',
+    createdAt: '2023-10-01'
+  }
 ];
 
 export const MOCK_INVOICES: Invoice[] = MOCK_RESIDENTS.map((r, i) => {

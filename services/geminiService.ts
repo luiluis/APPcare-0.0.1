@@ -1,7 +1,7 @@
 
 // Fix Gemini API implementation according to guidelines
 import { GoogleGenAI } from "@google/genai";
-import { FinancialRecord, Evolution } from "../types.ts";
+import { FinancialRecord } from "../types.ts";
 
 // Always use the process.env.API_KEY directly as requested in the guidelines
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -42,29 +42,37 @@ export const analyzeFinancialHealth = async (
 };
 
 /**
- * Gera um resumo de plantão baseado em evoluções relevantes.
+ * Gera um resumo de plantão estruturado baseado em logs operacionais.
+ * Identifica anomalias e ignora rotinas padrão.
  */
 export const generateHandoverSummary = async (
-  evolutions: (Evolution & { residentName: string })[]
+  shiftLogs: string[]
 ): Promise<string> => {
   try {
-    const evolutionsContext = evolutions.map(e => 
-      `Residente: ${e.residentName} | Tipo: ${e.type} | Nota: ${e.content} | Data: ${e.date}`
-    ).join('\n');
+    if (!shiftLogs || shiftLogs.length === 0) {
+      return "Nenhum evento relevante registrado para este período.";
+    }
+
+    const context = shiftLogs.join('\n');
 
     const prompt = `
-      Você é um Coordenador de Enfermagem sênior em uma ILPI (Instituição de Longa Permanência para Idosos).
-      Sua tarefa é resumir as últimas 12 horas de plantão para a equipe que está entrando agora.
-      
-      Evoluções Relevantes do Período:
-      ${evolutionsContext}
-      
-      Instruções Obrigatórias:
-      1. Escreva exatamente 3 parágrafos curtos.
-      2. Foque exclusivamente em anormalidades, picos de sinais vitais, alterações comportamentais ou urgências de suprimentos.
-      3. Ignore rotinas normais (ex: "banho realizado" sem intercorrência).
-      4. Use um tom clínico, profissional e de alerta quando necessário.
-      5. Organize as informações por gravidade/urgência.
+      Atue como Coordenador de Enfermagem sênior em uma casa de repouso. 
+      Sua tarefa é analisar os logs operacionais das últimas 12 horas e gerar um resumo de passagem de plantão.
+
+      LOGS DO PERÍODO:
+      ${context}
+
+      INSTRUÇÕES DE ANÁLISE:
+      1. Identifique ANOMALIAS CRÍTICAS (Ex: 'Recusa de medicação', 'PA alta/instável', 'Queda', 'Febre', 'Alteração súbita de comportamento').
+      2. IGNORE rotinas comuns que ocorreram sem intercorrências (Ex: 'Banho realizado', 'Aceitou dieta' - cite apenas se houver problema).
+      3. Seja clínico, conciso e profissional.
+
+      ESTRUTURA DO RESUMO (Obrigatório seguir estes 3 pontos):
+      - **Destaques Clínicos**: Foque em alterações de saúde e intercorrências médicas.
+      - **Pendências**: Informe o que precisa ser verificado ou concluído pela próxima equipe.
+      - **Observações Gerais**: Notas sobre comportamento, visitas ou suprimentos.
+
+      Caso não haja nada grave, informe que o plantão seguiu sem intercorrências relevantes.
     `;
 
     const response = await ai.models.generateContent({
@@ -72,9 +80,10 @@ export const generateHandoverSummary = async (
       contents: prompt,
     });
 
-    return response.text || "Nenhuma anormalidade relevante registrada nas últimas 12 horas.";
+    return response.text || "Plantão encerrado sem intercorrências críticas registradas.";
   } catch (error) {
     console.error("Gemini Handover Error:", error);
-    return "Erro ao gerar resumo do plantão.";
+    // Fallback genérico para garantir que o usuário não fique sem resposta
+    return "RESUMO AUTOMÁTICO INDISPONÍVEL:\n\n- **Destaques Clínicos**: Verificar evoluções individuais no prontuário.\n- **Pendências**: Conferir quadro de avisos e prescrições do próximo horário.\n- **Observações Gerais**: Equipe de enfermagem deve revisar as últimas anotações manuais.";
   }
 };

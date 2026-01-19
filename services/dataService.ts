@@ -7,12 +7,14 @@ import {
   MOCK_DOCUMENTS,
   MOCK_INVOICES,
   MOCK_STAFF,
+  MOCK_STAFF_DOCUMENTS,
+  MOCK_STAFF_INCIDENTS,
   BRANCHES
 } from '../constants.ts';
 import { 
   Resident, Prescription, StockItem, Evolution, 
   ResidentDocument, Invoice, Staff, Branch, DocumentCategory,
-  MedicationLog, IncidentReport
+  MedicationLog, IncidentReport, StaffDocument, StaffIncident
 } from '../types.ts';
 import { storageService } from './storageService.ts';
 
@@ -27,6 +29,10 @@ let db_documents = [...MOCK_DOCUMENTS];
 let db_invoices = [...MOCK_INVOICES];
 let db_medication_logs: MedicationLog[] = [];
 let db_incidents: IncidentReport[] = [];
+// RH Local State
+let db_staff = [...MOCK_STAFF];
+let db_staff_documents = [...MOCK_STAFF_DOCUMENTS];
+let db_staff_incidents = [...MOCK_STAFF_INCIDENTS];
 
 const simulateNetwork = async <T>(data: T, errorChance = 0.05): Promise<T> => {
   return new Promise((resolve, reject) => {
@@ -41,7 +47,7 @@ const simulateNetwork = async <T>(data: T, errorChance = 0.05): Promise<T> => {
 };
 
 export const dataService = {
-  // --- QUERIES ---
+  // --- QUERIES RESIDENTS/OPERATIONAL ---
   getResidents: async () => simulateNetwork(db_residents, 0.02),
   getResidentById: async (id: string) => {
     const res = db_residents.find(r => r.id === id);
@@ -53,17 +59,26 @@ export const dataService = {
   getEvolutionsByResident: async (resId: string) => simulateNetwork(db_evolutions.filter(e => e.residentId === resId), 0),
   getDocumentsByResident: async (resId: string) => simulateNetwork(db_documents.filter(d => d.residentId === resId), 0),
   getInvoices: async () => simulateNetwork(db_invoices, 0),
-  getStaff: async () => simulateNetwork(MOCK_STAFF, 0),
   getBranches: async () => simulateNetwork(BRANCHES, 0),
   getMedicationLogs: async () => simulateNetwork(db_medication_logs, 0),
   getIncidents: async () => simulateNetwork(db_incidents, 0),
   getIncidentsByResident: async (resId: string) => simulateNetwork(db_incidents.filter(i => i.residentId === resId), 0),
 
-  // --- MUTATIONS ---
+  // --- QUERIES STAFF (RH) ---
+  getStaff: async () => simulateNetwork(db_staff, 0),
+  
+  getStaffById: async (id: string) => {
+    const staff = db_staff.find(s => s.id === id);
+    if (!staff) throw new Error("Funcionário não encontrado.");
+    return simulateNetwork(staff, 0);
+  },
 
-  /**
-   * Adiciona um novo relatório de incidente.
-   */
+  getStaffDocuments: async (staffId: string) => simulateNetwork(db_staff_documents.filter(d => d.staffId === staffId), 0),
+  
+  getStaffIncidents: async (staffId: string) => simulateNetwork(db_staff_incidents.filter(i => i.staffId === staffId), 0),
+
+  // --- MUTATIONS OPERATIONAL ---
+
   addIncident: async (incident: Omit<IncidentReport, 'id'>): Promise<IncidentReport> => {
     const newIncident: IncidentReport = {
       ...incident,
@@ -73,9 +88,6 @@ export const dataService = {
     return simulateNetwork(newIncident);
   },
 
-  /**
-   * Registra a administração de um medicamento e faz baixa automática no estoque.
-   */
   registerMedicationAdmin: async (logData: Omit<MedicationLog, 'id'>): Promise<MedicationLog> => {
     const newLog: MedicationLog = {
       ...logData,
@@ -115,7 +127,7 @@ export const dataService = {
     return simulateNetwork(newLog);
   },
 
-  // Documentos (Integração com Storage)
+  // Documentos Residente (Integração com Storage)
   addDocument: async (residentId: string, title: string, category: DocumentCategory, file: File): Promise<ResidentDocument> => {
     const fileUrl = await storageService.uploadFile(file, 'resident-documents');
     const newDoc: ResidentDocument = {
@@ -155,5 +167,17 @@ export const dataService = {
   deletePrescription: async (id: string): Promise<boolean> => {
     db_prescriptions = db_prescriptions.filter(p => p.id !== id);
     return simulateNetwork(true);
+  },
+
+  // --- MUTATIONS STAFF (RH) ---
+
+  addStaffIncident: async (incident: Omit<StaffIncident, 'id' | 'createdAt'>): Promise<StaffIncident> => {
+    const newIncident: StaffIncident = {
+      ...incident,
+      id: `sinc-${Date.now()}`,
+      createdAt: new Date().toISOString()
+    };
+    db_staff_incidents.push(newIncident);
+    return simulateNetwork(newIncident);
   }
 };

@@ -5,15 +5,17 @@ import {
   Pill, Activity, CheckSquare, Clock, User, 
   Droplets, Heart, Sun, Moon, Coffee, ShowerHead, 
   Utensils, CheckCircle2, AlertOctagon, Save, PlusCircle,
-  AlertTriangle, Check, History, Undo2, X, Search, Sparkles, Loader2, RefreshCw
+  AlertTriangle, Check, History, Undo2, X, Search, Sparkles, Loader2, RefreshCw,
+  ClipboardCheck
 } from 'lucide-react';
 import { generateHandoverSummary } from '../services/geminiService';
+import { HandoverModal } from './modals/HandoverModal.tsx';
 
 interface DailyRoutineDashboardProps {
   residents: Resident[];
   onUpdateResident: (updated: Resident) => void;
   onLogAction: (action: string, details: string, category: AuditLog['category'], residentId?: string) => void;
-  onAddEvolution?: (residentId: string, content: string, type: Evolution['type']) => void;
+  onAddEvolution?: (residentId: string, content: string, type: Evolution['type'], isHandoverRelevant?: boolean) => void;
 }
 
 export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ residents, onUpdateResident, onLogAction, onAddEvolution }) => {
@@ -22,7 +24,7 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
   
   // State for Handover AI
   const [handoverText, setHandoverText] = useState<string | null>(null);
-  const [isLoadingHandover, setIsLoadingHandover] = useState(false);
+  const [isHandoverModalOpen, setIsHandoverModalOpen] = useState(false);
 
   // State for Batch Selection (Care Tab)
   const [selectedResidentIds, setSelectedResidentIds] = useState<Set<string>>(new Set());
@@ -37,44 +39,65 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
   // Histórico Local
   const [sessionHistory, setSessionHistory] = useState<Array<{id: string, text: string, time: string, residentName: string}>>([]);
 
-  // --- LOGIC: HANDOVER AI ---
-  const handleGenerateHandover = async () => {
-    setIsLoadingHandover(true);
-    try {
-      // Filtrar evoluções das últimas 12h marcadas como relevantes
-      const now = new Date();
-      const twelveHoursAgo = new Date(now.getTime() - (12 * 60 * 60 * 1000));
-      
-      const relevantEvolutions: (Evolution & { residentName: string })[] = [];
-      
-      residents.forEach(res => {
-        // Nota: No mundo real, buscaríamos do BD. Aqui simulamos buscando nas props.
-        const evs = (res as any).evolutions || []; // Fallback se injetado via prop ou estado
-        evs.forEach((ev: Evolution) => {
-          const evDate = new Date(ev.date.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
-          if (ev.isHandoverRelevant && evDate >= twelveHoursAgo) {
-            relevantEvolutions.push({ ...ev, residentName: res.name });
-          }
-        });
-      });
-
-      const summary = await generateHandoverSummary(relevantEvolutions);
-      setHandoverText(summary);
-    } catch (error) {
-      setHandoverText("Erro ao processar resumo do plantão.");
-    } finally {
-      setIsLoadingHandover(false);
-    }
-  };
-
   const getShift = () => {
     const hour = new Date().getHours();
-    if (hour >= 6 && hour < 12) return { label: 'Manhã', icon: Sun, color: 'text-orange-500', bg: 'bg-orange-50' };
-    if (hour >= 12 && hour < 18) return { label: 'Tarde', icon: Coffee, color: 'text-blue-500', bg: 'bg-blue-50' };
-    return { label: 'Noite', icon: Moon, color: 'text-indigo-500', bg: 'bg-indigo-50' };
+    if (hour >= 6 && hour < 12) return { label: 'Manhã', icon: Sun, color: 'text-orange-500', bg: 'bg-orange-50' } as const;
+    if (hour >= 12 && hour < 18) return { label: 'Tarde', icon: Coffee, color: 'text-blue-500', bg: 'bg-blue-50' } as const;
+    return { label: 'Noite', icon: Moon, color: 'text-indigo-500', bg: 'bg-indigo-50' } as const;
   };
 
   const shift = getShift();
+
+  // Filtragem combinada de evoluções relevantes + histórico da sessão para o fechamento
+  const getRelevantLogs = () => {
+    const now = new Date();
+    const twelveHoursAgo = new Date(now.getTime() - (12 * 60 * 60 * 1000));
+    const logs: string[] = [];
+    
+    // 1. Pegar evoluções oficiais marcadas como relevantes
+    residents.forEach(res => {
+      const evs = (res as any).evolutions || [];
+      evs.forEach((ev: Evolution) => {
+        try {
+            let evDate: Date;
+            if (ev.date.includes('/')) {
+                const [datePart, timePart] = ev.date.split(' ');
+                const [d, m, y] = datePart.split('/').map(Number);
+                const [h, min] = timePart.split(':').map(Number);
+                evDate = new Date(y, m - 1, d, h, min);
+            } else {
+                evDate = new Date(ev.date);
+            }
+
+            if (ev.isHandoverRelevant && evDate >= twelveHoursAgo) {
+                logs.push(`[Residente: ${res.name}] ${ev.type.toUpperCase()}: ${ev.content} (${ev.date})`);
+            }
+        } catch (e) {
+            if (ev.isHandoverRelevant) {
+                logs.push(`[Residente: ${res.name}] ${ev.type.toUpperCase()}: ${ev.content}`);
+            }
+        }
+      });
+    });
+
+    // 2. Adicionar histórico de ações rápidas da sessão atual
+    sessionHistory.forEach(historyLog => {
+        logs.push(`[Log Sessão] ${historyLog.residentName}: ${historyLog.text} às ${historyLog.time}`);
+    });
+
+    return logs;
+  };
+
+  const handleSaveHandoverAsEvolution = async (summary: string) => {
+    // Registra auditoria do fechamento
+    onLogAction("Fechamento de Plantão", `Resumo de ${shift.label} registrado via IA.`, "operational");
+    
+    // Adiciona o resumo como uma evolução global simulada (em um sistema real, haveria uma tabela de handovers)
+    setHandoverText(summary);
+    
+    // Limpa histórico da sessão após fechar o plantão (opcional)
+    // setSessionHistory([]);
+  };
 
   const addToHistory = (residentName: string, action: string) => {
       setSessionHistory(prev => [{
@@ -85,7 +108,74 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
       }, ...prev].slice(0, 10));
   };
 
-  // --- TAB 1: SMART MEDICATION MAP ---
+  const handleAdministerMed = (residentId: string, medName: string, time: string, isHighAlert?: boolean) => {
+    const res = residents.find(r => r.id === residentId);
+    if(res) {
+        onLogAction("Administração de Medicamento", `${medName} (${time})`, "medical", residentId);
+        addToHistory(res.name, `Medicamento: ${medName}`);
+        if (onAddEvolution) {
+            onAddEvolution(residentId, `Medicamento administrado: ${medName} (${time})`, 'nursing', false);
+        }
+    }
+  };
+
+  const handleVitalChange = (id: string, field: 'pressure' | 'glucose' | 'heartRate', value: string) => {
+    setVitalsInput(prev => ({
+      ...prev,
+      [id]: { ...prev[id], [field]: value }
+    }));
+  };
+
+  const getVitalStatusColor = (type: 'pressure' | 'glucose', value: string) => {
+      if (!value) return 'border-gray-200';
+      const num = parseInt(value);
+      if (type === 'pressure') {
+          const sys = parseInt(value.split('/')[0]);
+          if (sys > 140 || sys < 90) return 'border-red-400 bg-red-50 text-red-700';
+      }
+      if (type === 'glucose') {
+          if (num > 180 || num < 70) return 'border-red-400 bg-red-50 text-red-700';
+      }
+      return 'border-green-300 bg-green-50 text-green-800'; 
+  };
+
+  const saveVitalsRow = (resident: Resident) => {
+    const input = vitalsInput[resident.id];
+    if (!input) return;
+    const details = `PA: ${input.pressure || '-'}, HGT: ${input.glucose || '-'}, FC: ${input.heartRate || '-'}`;
+    onLogAction("Aferição de Sinais Vitais", details, "medical", resident.id);
+    if (onAddEvolution) {
+        onAddEvolution(resident.id, `Sinais Vitais aferidos: ${details}`, 'nursing', true); // Marcamos sinais vitais como relevantes para o plantão
+    }
+    addToHistory(resident.name, `Sinais Vitais (${details})`);
+    setVitalsInput(prev => {
+        const copy = {...prev};
+        delete copy[resident.id];
+        return copy;
+    });
+  };
+
+  const toggleSelection = (id: string) => {
+    const newSet = new Set(selectedResidentIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedResidentIds(newSet);
+  };
+
+  const applyBatchAction = (action: string) => {
+    if (selectedResidentIds.size === 0) return;
+    onLogAction("Registro em Lote", `Ação: ${action}`, "operational");
+    if (onAddEvolution) {
+        selectedResidentIds.forEach(id => {
+            onAddEvolution(id, `Rotina realizada: ${action} (Registro em lote)`, 'nursing', false);
+        });
+    }
+    addToHistory(`${selectedResidentIds.size} Residentes`, action);
+    setSelectedResidentIds(new Set());
+  };
+
+  const filteredResidents = residents.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
   const medsMap = useMemo(() => {
     const now = new Date();
     const currentHour = now.getHours();
@@ -137,73 +227,7 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
     };
   }, [residents]);
 
-  const handleAdministerMed = (residentId: string, medName: string, time: string, isHighAlert?: boolean) => {
-    const res = residents.find(r => r.id === residentId);
-    if(res) {
-        onLogAction("Administração de Medicamento", `${medName} (${time})`, "medical", residentId);
-        addToHistory(res.name, `Medicamento: ${medName}`);
-        if (onAddEvolution) {
-            onAddEvolution(residentId, `Medicamento administrado: ${medName} (${time})`, 'nursing');
-        }
-    }
-  };
-
-  const handleVitalChange = (id: string, field: 'pressure' | 'glucose' | 'heartRate', value: string) => {
-    setVitalsInput(prev => ({
-      ...prev,
-      [id]: { ...prev[id], [field]: value }
-    }));
-  };
-
-  const getVitalStatusColor = (type: 'pressure' | 'glucose', value: string) => {
-      if (!value) return 'border-gray-200';
-      const num = parseInt(value);
-      if (type === 'pressure') {
-          const sys = parseInt(value.split('/')[0]);
-          if (sys > 140 || sys < 90) return 'border-red-400 bg-red-50 text-red-700';
-      }
-      if (type === 'glucose') {
-          if (num > 180 || num < 70) return 'border-red-400 bg-red-50 text-red-700';
-      }
-      return 'border-green-300 bg-green-50 text-green-800'; 
-  };
-
-  const saveVitalsRow = (resident: Resident) => {
-    const input = vitalsInput[resident.id];
-    if (!input) return;
-    const details = `PA: ${input.pressure || '-'}, HGT: ${input.glucose || '-'}, FC: ${input.heartRate || '-'}`;
-    onLogAction("Aferição de Sinais Vitais", details, "medical", resident.id);
-    if (onAddEvolution) {
-        onAddEvolution(resident.id, `Sinais Vitais aferidos: ${details}`, 'nursing');
-    }
-    addToHistory(resident.name, `Sinais Vitais (${details})`);
-    setVitalsInput(prev => {
-        const copy = {...prev};
-        delete copy[resident.id];
-        return copy;
-    });
-  };
-
-  const toggleSelection = (id: string) => {
-    const newSet = new Set(selectedResidentIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setSelectedResidentIds(newSet);
-  };
-
-  const applyBatchAction = (action: string) => {
-    if (selectedResidentIds.size === 0) return;
-    onLogAction("Registro em Lote", `Ação: ${action}`, "operational");
-    if (onAddEvolution) {
-        selectedResidentIds.forEach(id => {
-            onAddEvolution(id, `Rotina realizada: ${action} (Registro em lote)`, 'nursing');
-        });
-    }
-    addToHistory(`${selectedResidentIds.size} Residentes`, action);
-    setSelectedResidentIds(new Set());
-  };
-
-  const filteredResidents = residents.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const hasCriticalPendencies = medsMap.late.length > 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 pb-20">
@@ -232,12 +256,28 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                     onChange={e => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <button 
-                  onClick={() => setIsManualEntryOpen(true)}
-                  className="flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-colors"
-                >
-                    <PlusCircle className="w-4 h-4" /> Registro Manual
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                    <button 
+                    onClick={() => setIsManualEntryOpen(true)}
+                    className="flex items-center justify-center gap-2 py-2.5 bg-gray-100 text-gray-700 text-sm font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                    >
+                        <PlusCircle className="w-4 h-4" /> Registro
+                    </button>
+                    <button 
+                    onClick={() => setIsHandoverModalOpen(true)}
+                    className={`flex items-center justify-center gap-2 py-2.5 text-white text-sm font-bold rounded-xl transition-all relative
+                        ${hasCriticalPendencies ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-100' : 'bg-gray-900 hover:bg-gray-800'}
+                    `}
+                    >
+                        <ClipboardCheck className="w-4 h-4" /> Fechar Plantão
+                        {hasCriticalPendencies && (
+                            <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600 items-center justify-center text-[8px] text-white">!</span>
+                            </span>
+                        )}
+                    </button>
+                </div>
              </div>
           </div>
 
@@ -255,12 +295,11 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                     <p className="text-indigo-300 text-xs font-medium">Resumo baseado nas evoluções relevantes das últimas 12h</p>
                 </div>
                 <button 
-                    onClick={handleGenerateHandover}
-                    disabled={isLoadingHandover}
-                    className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50"
-                    title="Atualizar Resumo"
+                    onClick={() => setIsHandoverModalOpen(true)}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                    title="Realizar Passagem de Plantão Completa"
                 >
-                    {isLoadingHandover ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    <RefreshCw className="w-4 h-4" />
                 </button>
              </div>
 
@@ -275,11 +314,10 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
              ) : (
                 <div className="h-28 flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-2xl">
                     <button 
-                        onClick={handleGenerateHandover}
-                        disabled={isLoadingHandover}
+                        onClick={() => setIsHandoverModalOpen(true)}
                         className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold transition-all shadow-lg"
                     >
-                        {isLoadingHandover ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Activity className="w-5 h-5"/> Gerar Resumo do Plantão</>}
+                        <Activity className="w-5 h-5"/> Gerar Resumo do Plantão
                     </button>
                 </div>
              )}
@@ -519,7 +557,7 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                     <button 
                         onClick={() => {
                             if(manualEntryForm.residentId && manualEntryForm.note && onAddEvolution) {
-                                onAddEvolution(manualEntryForm.residentId, `Registro Manual: ${manualEntryForm.note}`, 'nursing');
+                                onAddEvolution(manualEntryForm.residentId, `Registro Manual: ${manualEntryForm.note}`, 'nursing', false);
                                 addToHistory(residents.find(r => r.id === manualEntryForm.residentId)?.name || "Residente", "Registro Manual");
                                 setIsManualEntryOpen(false);
                             }
@@ -532,6 +570,15 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
              </div>
           </div>
       )}
+
+      {/* Handover AI Modal */}
+      <HandoverModal 
+        isOpen={isHandoverModalOpen}
+        onClose={() => setIsHandoverModalOpen(false)}
+        currentShift={shift.label}
+        logs={getRelevantLogs()}
+        onSave={handleSaveHandoverAsEvolution}
+      />
 
     </div>
   );
