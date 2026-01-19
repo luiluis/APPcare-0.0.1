@@ -40,6 +40,13 @@ export const StaffProfilePage: React.FC = () => {
     loadData();
   }, [id]);
 
+  const handleUpdateStaff = (updatedStaff: Staff) => {
+      // Em uma aplicação real, aqui chamaríamos o dataService.updateStaff(updatedStaff)
+      // Como estamos usando mock local, atualizamos o estado local para refletir na UI imediatamente
+      setStaff(updatedStaff);
+      console.log("Colaborador atualizado:", updatedStaff);
+  };
+
   if (loading) return <div className="flex justify-center items-center h-[50vh]"><Loader2 className="w-10 h-10 animate-spin text-blue-600" /></div>;
   if (!staff) return <div className="text-center p-10">Colaborador não encontrado.</div>;
 
@@ -83,7 +90,7 @@ export const StaffProfilePage: React.FC = () => {
         </div>
 
         <div className="flex-1">
-            {activeTab === 'info' && <StaffInfoTab staff={staff} />}
+            {activeTab === 'info' && <StaffInfoTab staff={staff} onUpdate={handleUpdateStaff} />}
             {activeTab === 'incidents' && <StaffIncidentsTab staff={staff} incidents={incidents} onUpdateIncidents={setIncidents} />}
             {activeTab === 'docs' && <StaffDocumentsTab staff={staff} documents={documents} onUpdateDocuments={setDocuments} />}
         </div>

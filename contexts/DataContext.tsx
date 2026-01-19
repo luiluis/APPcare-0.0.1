@@ -33,6 +33,7 @@ interface DataContextType {
   addEvolution: (resId: string, content: string, type: Evolution['type']) => void;
   logAction: (action: string, details: string, category: AuditLog['category'], resId?: string) => void;
   addIncident: (incidentData: any) => Promise<void>;
+  addStaff: (staffData: Partial<Staff>) => Promise<void>;
   
   // Setters (used by pages for optimistic updates)
   setInvoices: React.Dispatch<React.SetStateAction<Invoice[]>>;
@@ -162,13 +163,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addEvolution(incidentData.residentId, `INCIDENTE REGISTRADO: ${incidentData.type.toUpperCase()}. ${incidentData.description}`, 'nursing');
   };
 
+  const addStaff = async (staffData: Partial<Staff>) => {
+    const newStaff = await dataService.addStaff(staffData);
+    setStaff(prev => [...prev, newStaff]);
+    logAction("Novo Colaborador", `Cadastrado: ${newStaff.name}`, "operational");
+  };
+
   const value = {
     residents, invoices, prescriptions, stockItems, evolutions, 
     documents, incidents, auditLogs, 
     staff, staffDocuments, staffIncidents,
     isLoading,
     selectedBranchId, setSelectedBranchId, 
-    updateResident, addEvolution, logAction, addIncident, 
+    updateResident, addEvolution, logAction, addIncident, addStaff,
     setInvoices, setPrescriptions, setStockItems, setDocuments
   };
 

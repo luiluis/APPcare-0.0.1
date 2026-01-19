@@ -171,6 +171,42 @@ export const dataService = {
 
   // --- MUTATIONS STAFF (RH) ---
 
+  addStaff: async (staffData: Partial<Staff>): Promise<Staff> => {
+    const newStaff: Staff = {
+      id: `stf-${Date.now()}`,
+      name: staffData.name || 'Novo Colaborador',
+      role: staffData.role || 'Cargo não definido',
+      branchId: staffData.branchId || BRANCHES[0].id,
+      active: true,
+      created_at: new Date().toISOString(),
+      // Inicializa objetos complexos vazios para evitar erros de renderização
+      personalInfo: {
+        cpf: (staffData.personalInfo as any)?.cpf || '',
+        rg: '',
+        birthDate: '',
+        phone: '',
+        email: '',
+        address: '',
+        maritalStatus: 'solteiro',
+        childrenCount: 0
+      },
+      contractInfo: {
+        admissionDate: new Date().toISOString().split('T')[0],
+        jobTitle: staffData.role || '',
+        department: 'enfermagem',
+        scale: '12x36',
+        workShift: 'diurno'
+      },
+      financialInfo: {
+        baseSalary: 0,
+        insalubridadeLevel: 0,
+        bankInfo: { banco: '', agencia: '', conta: '' }
+      }
+    };
+    db_staff.push(newStaff);
+    return simulateNetwork(newStaff);
+  },
+
   addStaffIncident: async (incident: Omit<StaffIncident, 'id' | 'createdAt'>): Promise<StaffIncident> => {
     const newIncident: StaffIncident = {
       ...incident,

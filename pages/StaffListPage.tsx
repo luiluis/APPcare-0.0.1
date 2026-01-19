@@ -3,12 +3,15 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext.tsx';
 import { BRANCHES } from '../constants.ts';
-import { Users, Search, Building2, ChevronRight, UserCircle2 } from 'lucide-react';
+import { Users, Search, Building2, ChevronRight, UserCircle2, CheckCircle2 } from 'lucide-react';
+import { CreateStaffModal } from '../components/staff/modals/CreateStaffModal.tsx';
 
 export const StaffListPage: React.FC = () => {
   const navigate = useNavigate();
-  const { staff, selectedBranchId } = useData();
+  const { staff, selectedBranchId, addStaff } = useData();
   const [searchTerm, setSearchTerm] = useState('');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const filteredStaff = useMemo(() => {
     return staff.filter(s => {
@@ -19,15 +22,35 @@ export const StaffListPage: React.FC = () => {
     });
   }, [staff, selectedBranchId, searchTerm]);
 
+  const handleCreateStaff = async (data: any) => {
+      await addStaff(data);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300 relative">
       
+      {/* Toast de Sucesso */}
+      {showSuccess && (
+          <div className="fixed top-24 right-6 z-50 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-xl flex items-center gap-3 animate-in slide-in-from-right fade-in">
+              <CheckCircle2 className="w-6 h-6" />
+              <div>
+                  <p className="font-bold text-sm">Sucesso!</p>
+                  <p className="text-xs text-emerald-100">Colaborador cadastrado.</p>
+              </div>
+          </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
          <div>
             <h2 className="text-2xl font-bold text-gray-900">Gestão de Equipe</h2>
             <p className="text-gray-500 text-sm">Controle de colaboradores, escalas e documentação.</p>
          </div>
-         <button className="bg-blue-600 text-white font-bold px-6 py-2.5 rounded-xl hover:bg-blue-700 shadow-md transition-all">
+         <button 
+           onClick={() => setIsCreateModalOpen(true)}
+           className="bg-blue-600 text-white font-bold px-6 py-2.5 rounded-xl hover:bg-blue-700 shadow-md transition-all flex items-center justify-center gap-2"
+         >
             + Novo Colaborador
          </button>
       </div>
@@ -94,6 +117,13 @@ export const StaffListPage: React.FC = () => {
             <p className="font-medium">Nenhum colaborador encontrado.</p>
          </div>
       )}
+
+      <CreateStaffModal 
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSave={handleCreateStaff}
+      />
+
     </div>
   );
 };
