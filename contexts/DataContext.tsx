@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { 
   Resident, Invoice, Evolution, Prescription, StockItem, 
-  ResidentDocument, IncidentReport, AuditLog, Staff, StaffDocument, StaffIncident 
+  ResidentDocument, IncidentReport, AuditLog, Staff, StaffDocument, StaffIncident, HRAlert 
 } from '../types.ts';
 import { dataService } from '../services/dataService.ts';
 import { useAuth } from './AuthContext.tsx';
@@ -22,6 +22,7 @@ interface DataContextType {
   staff: Staff[];
   staffDocuments: StaffDocument[];
   staffIncidents: StaffIncident[];
+  hrAlerts: HRAlert[];
 
   // State Control
   isLoading: boolean;
@@ -65,6 +66,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [staff, setStaff] = useState<Staff[]>([]);
   const [staffDocuments, setStaffDocuments] = useState<StaffDocument[]>([]);
   const [staffIncidents, setStaffIncidents] = useState<StaffIncident[]>([]);
+  const [hrAlerts, setHrAlerts] = useState<HRAlert[]>([]);
 
   // Load Data on Mount
   useEffect(() => {
@@ -75,7 +77,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const [
           resData, invData, prescData, stockData, 
           evolData, docData, incData, logData,
-          staffData
+          staffData, alertsData
         ] = await Promise.all([
           dataService.getResidents(),
           dataService.getInvoices(),
@@ -87,7 +89,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           dataService.getDocumentsByResident('all'),
           dataService.getIncidents(),
           Promise.resolve([]), // Audit logs mock if no service method
-          dataService.getStaff()
+          dataService.getStaff(),
+          dataService.getHRAlerts()
         ]);
 
         setResidents(resData);
@@ -101,6 +104,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setDocuments(Array.isArray(docData) ? docData : []);
         setIncidents(incData);
         setStaff(staffData);
+        setHrAlerts(alertsData);
         
         // Load Staff related data (Simulated flattening)
         // In a real app, we would fetch these on demand or have specific endpoints
@@ -172,7 +176,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const value = {
     residents, invoices, prescriptions, stockItems, evolutions, 
     documents, incidents, auditLogs, 
-    staff, staffDocuments, staffIncidents,
+    staff, staffDocuments, staffIncidents, hrAlerts,
     isLoading,
     selectedBranchId, setSelectedBranchId, 
     updateResident, addEvolution, logAction, addIncident, addStaff,

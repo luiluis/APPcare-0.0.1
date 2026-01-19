@@ -298,6 +298,16 @@ export interface StaffIncident {
   createdAt: string;
 }
 
+export interface HRAlert {
+  id: string;
+  staffId: string;
+  staffName: string;
+  type: 'contract' | 'vacation' | 'document';
+  severity: 'high' | 'medium'; // high = vencido, medium = vencendo
+  message: string;
+  date?: string; // Data de vencimento relevante
+}
+
 // --- DTOs ---
 
 export interface CreateInvoiceDTO {

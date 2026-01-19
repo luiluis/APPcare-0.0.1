@@ -3,12 +3,14 @@ import React, { useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
 import { StatCard } from './StatCard';
 import { FinancialChart } from './FinancialChart';
-import { Users, DollarSign, BedDouble, AlertTriangle, FileText, Wallet, TrendingUp } from 'lucide-react';
+import { Users, DollarSign, BedDouble, AlertTriangle, FileText, Wallet, TrendingUp, Briefcase, Palmtree, FileWarning, ArrowRight } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { InvoiceStatus } from '../types';
+import { useNavigate } from 'react-router-dom';
 
 export const ManagerDashboard: React.FC = () => {
-  const { residents, invoices, staff } = useData();
+  const { residents, invoices, staff, hrAlerts } = useData();
+  const navigate = useNavigate();
 
   // --- KPI 1: OCUPAÇÃO ---
   const totalBeds = 50;
@@ -94,6 +96,15 @@ export const ManagerDashboard: React.FC = () => {
     return list;
   }, [invoices]);
 
+  const getHRAlertIcon = (type: string) => {
+      switch (type) {
+          case 'contract': return Briefcase;
+          case 'vacation': return Palmtree;
+          case 'document': return FileWarning;
+          default: return AlertTriangle;
+      }
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       
@@ -156,6 +167,50 @@ export const ManagerDashboard: React.FC = () => {
         {/* Right Column: Alerts & Quick Stats */}
         <div className="space-y-6">
            
+           {/* Radar RH Widget (NOVO) */}
+           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-purple-600" /> Radar RH
+                  </h3>
+                  {hrAlerts.length > 0 && <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">{hrAlerts.length}</span>}
+              </div>
+              
+              <div className="space-y-3">
+                  {hrAlerts.length > 0 ? hrAlerts.map(alert => {
+                      const Icon = getHRAlertIcon(alert.type);
+                      return (
+                          <div 
+                            key={alert.id} 
+                            onClick={() => navigate(`/rh/${alert.staffId}`)}
+                            className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100 cursor-pointer group"
+                          >
+                              <div className={`p-2 rounded-lg flex-shrink-0 mt-0.5 ${alert.severity === 'high' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                                  <Icon className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                  <div className="flex justify-between items-center">
+                                      <p className="text-sm font-bold text-gray-800 truncate">{alert.staffName}</p>
+                                      <ArrowRight className="w-3 h-3 text-gray-300 group-hover:text-blue-500" />
+                                  </div>
+                                  <p className={`text-xs mt-0.5 leading-snug ${alert.severity === 'high' ? 'text-red-700 font-medium' : 'text-gray-500'}`}>
+                                      {alert.message}
+                                  </p>
+                              </div>
+                          </div>
+                      );
+                  }) : (
+                      <div className="text-center py-6">
+                          <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-2">
+                              <Users className="w-6 h-6 text-green-500" />
+                          </div>
+                          <p className="text-sm font-medium text-gray-900">Tudo Certo!</p>
+                          <p className="text-xs text-gray-500">Nenhuma pendência trabalhista encontrada.</p>
+                      </div>
+                  )}
+              </div>
+           </div>
+
            {/* Alerts List */}
            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
               <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -177,18 +232,6 @@ export const ManagerDashboard: React.FC = () => {
                    <p className="text-sm text-gray-400 italic">Nenhum alerta pendente.</p>
                  )}
               </div>
-           </div>
-
-           {/* Mini Stat - Ticket Médio (Exemplo) */}
-           <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-2xl text-white shadow-lg">
-              <p className="text-slate-400 text-xs font-bold uppercase mb-1">Ticket Médio por Residente</p>
-              <h3 className="text-2xl font-bold mb-4">
-                 {occupiedBeds > 0 ? formatCurrency(monthlyRevenue / occupiedBeds) : 'R$ 0,00'}
-              </h3>
-              <div className="w-full bg-white/10 rounded-full h-1.5 mb-2">
-                 <div className="bg-emerald-400 h-1.5 rounded-full" style={{ width: '75%' }}></div>
-              </div>
-              <p className="text-[10px] text-slate-400">Baseado no faturamento atual.</p>
            </div>
 
         </div>

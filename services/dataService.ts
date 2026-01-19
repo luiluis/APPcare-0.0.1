@@ -14,7 +14,7 @@ import {
 import { 
   Resident, Prescription, StockItem, Evolution, 
   ResidentDocument, Invoice, Staff, Branch, DocumentCategory,
-  MedicationLog, IncidentReport, StaffDocument, StaffIncident, StaffDocumentCategory
+  MedicationLog, IncidentReport, StaffDocument, StaffIncident, StaffDocumentCategory, HRAlert
 } from '../types.ts';
 import { storageService } from './storageService.ts';
 
@@ -76,6 +76,90 @@ export const dataService = {
   getStaffDocuments: async (staffId: string) => simulateNetwork(db_staff_documents.filter(d => d.staffId === staffId), 0),
   
   getStaffIncidents: async (staffId: string) => simulateNetwork(db_staff_incidents.filter(i => i.staffId === staffId), 0),
+
+  getHRAlerts: async (): Promise<HRAlert[]> => {
+    const alerts: HRAlert[] = [];
+    const today = new Date();
+    
+    // 1. Verificar Colaboradores
+    db_staff.forEach(staff => {
+        if (!staff.active || !staff.contractInfo?.admissionDate) return;
+
+        const admission = new Date(staff.contractInfo.admissionDate);
+        const diffTime = Math.abs(today.getTime() - admission.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const diffYears = diffDays / 365;
+
+        // A. Contrato de Experiência (45 dias ou 90 dias)
+        // Alerta se faltar 5 dias ou menos para completar 45 ou 90
+        const daysTo45 = 45 - diffDays;
+        const daysTo90 = 90 - diffDays;
+
+        if (daysTo45 > 0 && daysTo45 <= 5) {
+            alerts.push({
+                id: `exp-45-${staff.id}`,
+                staffId: staff.id,
+                staffName: staff.name,
+                type: 'contract',
+                severity: 'medium',
+                message: `Fim da 1ª experiência (45 dias) em ${daysTo45} dias.`,
+                date: new Date(admission.getTime() + (45 * 24 * 60 * 60 * 1000)).toISOString()
+            });
+        } else if (daysTo90 > 0 && daysTo90 <= 5) {
+            alerts.push({
+                id: `exp-90-${staff.id}`,
+                staffId: staff.id,
+                staffName: staff.name,
+                type: 'contract',
+                severity: 'high',
+                message: `Fim da experiência (90 dias) em ${daysTo90} dias. Definir efetivação.`,
+                date: new Date(admission.getTime() + (90 * 24 * 60 * 60 * 1000)).toISOString()
+            });
+        }
+
+        // B. Férias Vencidas (> 1 ano de casa)
+        // Simplificação: Se tem mais de 1 ano e 1 mês, gera alerta "Férias a Vencer/Vencidas"
+        if (diffYears >= 1.0) {
+             // Num sistema real verificaria a tabela de ferias gozadas
+             alerts.push({
+                id: `vac-${staff.id}`,
+                staffId: staff.id,
+                staffName: staff.name,
+                type: 'vacation',
+                severity: diffYears >= 1.9 ? 'high' : 'medium', // Perto de dobrar (2 anos) é crítico
+                message: diffYears >= 1.9 ? 'Férias prestes a dobrar (risco legal).' : 'Direito a férias adquirido (+1 ano).',
+                date: undefined
+             });
+        }
+    });
+
+    // 2. Verificar Documentos Vencidos
+    db_staff_documents.forEach(doc => {
+        if (!doc.expirationDate) return;
+        
+        const staff = db_staff.find(s => s.id === doc.staffId);
+        if (!staff || !staff.active) return;
+
+        const expDate = new Date(doc.expirationDate);
+        const isExpired = expDate < today;
+        // Expira nos próximos 30 dias
+        const isExpiringSoon = expDate > today && (expDate.getTime() - today.getTime()) / (1000 * 3600 * 24) <= 30;
+
+        if (isExpired || isExpiringSoon) {
+            alerts.push({
+                id: `doc-${doc.id}`,
+                staffId: doc.staffId,
+                staffName: staff.name,
+                type: 'document',
+                severity: isExpired ? 'high' : 'medium',
+                message: `${doc.title} ${isExpired ? 'VENCIDO' : 'vence em breve'}.`,
+                date: doc.expirationDate
+            });
+        }
+    });
+
+    return simulateNetwork(alerts, 0);
+  },
 
   // --- MUTATIONS OPERATIONAL ---
 
