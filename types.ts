@@ -286,7 +286,7 @@ export interface StaffDocument {
   description?: string;
 }
 
-export type StaffIncidentType = 'advertencia' | 'suspensao' | 'atestado' | 'falta' | 'atraso';
+export type StaffIncidentType = 'advertencia' | 'suspensao' | 'atestado' | 'falta' | 'atraso' | 'ferias';
 
 export interface StaffIncident {
   id: string;

@@ -2,10 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { dataService } from '../services/dataService.ts';
-import { Staff, StaffDocument } from '../types.ts';
-import { Loader2, ArrowLeft, UserCircle2, User, FileText, AlertTriangle } from 'lucide-react';
+import { Staff, StaffDocument, StaffIncident } from '../types.ts';
+import { Loader2, ArrowLeft, UserCircle2, User, FileText, AlertTriangle, ClipboardList } from 'lucide-react';
 import { StaffInfoTab } from '../components/staff/StaffInfoTab.tsx';
 import { StaffDocumentsTab } from '../components/staff/StaffDocumentsTab.tsx';
+import { StaffIncidentsTab } from '../components/staff/StaffIncidentsTab.tsx';
 
 export const StaffProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -14,19 +15,22 @@ export const StaffProfilePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<Staff | null>(null);
   const [documents, setDocuments] = useState<StaffDocument[]>([]);
-  const [activeTab, setActiveTab] = useState<'info' | 'docs'>('info');
+  const [incidents, setIncidents] = useState<StaffIncident[]>([]);
+  const [activeTab, setActiveTab] = useState<'info' | 'docs' | 'incidents'>('info');
 
   useEffect(() => {
     const loadData = async () => {
         if (!id) return;
         setLoading(true);
         try {
-            const [s, docs] = await Promise.all([
+            const [s, docs, incs] = await Promise.all([
                 dataService.getStaffById(id),
-                dataService.getStaffDocuments(id)
+                dataService.getStaffDocuments(id),
+                dataService.getStaffIncidents(id)
             ]);
             setStaff(s);
             setDocuments(docs);
+            setIncidents(incs);
         } catch (error) {
             console.error(error);
         } finally {
@@ -55,16 +59,22 @@ export const StaffProfilePage: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-6 border-b border-gray-100">
+                <div className="flex items-center gap-6 border-b border-gray-100 overflow-x-auto">
                     <button 
                       onClick={() => setActiveTab('info')}
-                      className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                      className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'info' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                     >
                         <User className="w-4 h-4" /> Visão Geral
                     </button>
                     <button 
+                      onClick={() => setActiveTab('incidents')}
+                      className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'incidents' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <ClipboardList className="w-4 h-4" /> Prontuário
+                    </button>
+                    <button 
                       onClick={() => setActiveTab('docs')}
-                      className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'docs' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                      className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'docs' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                     >
                         <FileText className="w-4 h-4" /> Documentos
                     </button>
@@ -74,6 +84,7 @@ export const StaffProfilePage: React.FC = () => {
 
         <div className="flex-1">
             {activeTab === 'info' && <StaffInfoTab staff={staff} />}
+            {activeTab === 'incidents' && <StaffIncidentsTab staff={staff} incidents={incidents} onUpdateIncidents={setIncidents} />}
             {activeTab === 'docs' && <StaffDocumentsTab staff={staff} documents={documents} onUpdateDocuments={setDocuments} />}
         </div>
     </div>
