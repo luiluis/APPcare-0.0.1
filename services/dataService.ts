@@ -172,15 +172,8 @@ export const dataService = {
   // --- MUTATIONS STAFF (RH) ---
 
   addStaff: async (staffData: Partial<Staff>): Promise<Staff> => {
-    const newStaff: Staff = {
-      id: `stf-${Date.now()}`,
-      name: staffData.name || 'Novo Colaborador',
-      role: staffData.role || 'Cargo não definido',
-      branchId: staffData.branchId || BRANCHES[0].id,
-      active: true,
-      created_at: new Date().toISOString(),
-      // Inicializa objetos complexos vazios para evitar erros de renderização
-      personalInfo: {
+    // Valores default caso não venham do modal
+    const defaultPersonalInfo = {
         cpf: (staffData.personalInfo as any)?.cpf || '',
         rg: '',
         birthDate: '',
@@ -189,19 +182,34 @@ export const dataService = {
         address: '',
         maritalStatus: 'solteiro',
         childrenCount: 0
-      },
-      contractInfo: {
+    };
+    const defaultContractInfo = {
         admissionDate: new Date().toISOString().split('T')[0],
         jobTitle: staffData.role || '',
         department: 'enfermagem',
         scale: '12x36',
         workShift: 'diurno'
-      },
-      financialInfo: {
+    };
+    const defaultFinancialInfo = {
         baseSalary: 0,
         insalubridadeLevel: 0,
         bankInfo: { banco: '', agencia: '', conta: '' }
-      }
+    };
+
+    const newStaff: Staff = {
+      id: `stf-${Date.now()}`,
+      created_at: new Date().toISOString(),
+      active: true,
+      ...staffData, // Espalha os dados recebidos para garantir que contractInfo e personalInfo preenchidos venham
+      
+      name: staffData.name || 'Novo Colaborador',
+      role: staffData.role || 'Cargo não definido',
+      branchId: staffData.branchId || BRANCHES[0].id,
+      
+      // Garante que os objetos existam fazendo merge com defaults
+      personalInfo: { ...defaultPersonalInfo, ...staffData.personalInfo } as any,
+      contractInfo: { ...defaultContractInfo, ...staffData.contractInfo } as any,
+      financialInfo: { ...defaultFinancialInfo, ...staffData.financialInfo } as any,
     };
     db_staff.push(newStaff);
     return simulateNetwork(newStaff);

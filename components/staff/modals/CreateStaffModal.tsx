@@ -29,7 +29,30 @@ export const CreateStaffModal: React.FC<CreateStaffModalProps> = ({ isOpen, onCl
         name: formData.name,
         role: formData.role,
         branchId: formData.branchId,
-        personalInfo: { cpf: formData.cpf } as any // Apenas o básico
+        active: true,
+        // Inicializa objetos obrigatórios para não quebrar a visualização
+        personalInfo: {
+            cpf: formData.cpf,
+            rg: '',
+            birthDate: '',
+            phone: '',
+            email: '',
+            address: '',
+            maritalStatus: 'solteiro',
+            childrenCount: 0
+        },
+        contractInfo: {
+            admissionDate: new Date().toISOString().split('T')[0],
+            jobTitle: formData.role,
+            department: 'enfermagem', // Valor default seguro
+            scale: '12x36',
+            workShift: 'diurno'
+        },
+        financialInfo: {
+            baseSalary: 0,
+            insalubridadeLevel: 0,
+            bankInfo: { banco: '', agencia: '', conta: '' }
+        }
       });
       onClose();
       // Reset form
