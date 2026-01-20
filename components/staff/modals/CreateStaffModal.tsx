@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { X, UserPlus, Building2, Briefcase, CreditCard, User, Loader2 } from 'lucide-react';
 import { BRANCHES } from '../../../constants';
 import { Staff } from '../../../types';
+import { formatCPF } from '../../../lib/utils';
 
 interface CreateStaffModalProps {
   isOpen: boolean;
@@ -64,7 +65,8 @@ export const CreateStaffModal: React.FC<CreateStaffModalProps> = ({ isOpen, onCl
     }
   };
 
-  const inputStyle = "w-full border border-gray-300 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 transition-all";
+  // Cores explícitas (bg-white text-gray-900) para evitar problemas de contraste
+  const inputStyle = "w-full border border-gray-300 rounded-lg px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 transition-all bg-white text-gray-900";
   const labelStyle = "block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5";
 
   return (
@@ -116,7 +118,8 @@ export const CreateStaffModal: React.FC<CreateStaffModalProps> = ({ isOpen, onCl
                       className={`${inputStyle} pl-10`}
                       placeholder="000.000.000-00"
                       value={formData.cpf}
-                      onChange={e => setFormData({...formData, cpf: e.target.value})}
+                      maxLength={14}
+                      onChange={e => setFormData({...formData, cpf: formatCPF(e.target.value)})}
                     />
                  </div>
               </div>
@@ -127,7 +130,7 @@ export const CreateStaffModal: React.FC<CreateStaffModalProps> = ({ isOpen, onCl
               <div className="relative">
                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                  <select 
-                   className={`${inputStyle} pl-10 bg-white`}
+                   className={`${inputStyle} pl-10`}
                    value={formData.branchId}
                    onChange={e => setFormData({...formData, branchId: e.target.value})}
                  >

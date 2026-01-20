@@ -258,10 +258,11 @@ export interface Staff {
     baseSalary: number;
     insalubridadeLevel: 0 | 20 | 40;
     bankInfo: {
-      banco: string;
-      agencia: string;
-      conta: string;
-      pix?: string;
+      banco?: string;
+      agencia?: string;
+      conta?: string;
+      pixKeyType?: 'cpf' | 'email' | 'telefone' | 'aleatoria' | string;
+      pixKey?: string;
     };
   };
 

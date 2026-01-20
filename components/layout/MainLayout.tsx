@@ -15,12 +15,16 @@ export const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  // Nova ordem hierárquica: Gestão (Visão Geral, Financeiro, RH) > Operacional (Residentes, Rotina)
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/rotina', label: 'Rotina Diária', icon: ClipboardCheck },
-    { path: '/residentes', label: 'Residentes', icon: Users },
-    { path: '/rh', label: 'Equipe', icon: Briefcase },
+    // --- Bloco Gestão ---
+    { path: '/', label: 'Visão Geral', icon: LayoutDashboard },
     { path: '/financeiro', label: 'Financeiro', icon: Wallet },
+    { path: '/rh', label: 'Equipe', icon: Briefcase },
+    
+    // --- Bloco Operacional ---
+    { path: '/residentes', label: 'Residentes', icon: Users },
+    { path: '/rotina', label: 'Rotina Diária', icon: ClipboardCheck },
   ];
 
   return (
@@ -33,16 +37,24 @@ export const MainLayout: React.FC = () => {
         </div>
         
         <nav className="space-y-2 flex-1">
-          {navItems.map((item) => (
-            <Link 
-              key={item.path} 
-              to={item.path} 
-              className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 
-                ${location.pathname.startsWith(item.path) && (item.path !== '/' || location.pathname === '/') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="font-medium">{item.label}</span>
-            </Link>
+          {navItems.map((item, index) => (
+            <React.Fragment key={item.path}>
+              {/* Separador Visual antes de 'Residentes' (índice 3 na nova ordem) */}
+              {item.path === '/residentes' && (
+                <div className="pt-4 pb-2 pl-4">
+                  <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Operacional</p>
+                </div>
+              )}
+              
+              <Link 
+                to={item.path} 
+                className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 
+                  ${location.pathname.startsWith(item.path) && (item.path !== '/' || location.pathname === '/') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+              >
+                <item.icon className="w-5 h-5" />
+                <span className="font-medium">{item.label}</span>
+              </Link>
+            </React.Fragment>
           ))}
         </nav>
 
@@ -109,12 +121,21 @@ export const MainLayout: React.FC = () => {
                 <button onClick={() => setIsMobileSidebarOpen(false)}><X className="text-white"/></button>
              </div>
              <nav className="space-y-2">
-                {navItems.map((item) => (
-                  <Link key={item.path} to={item.path} onClick={() => setIsMobileSidebarOpen(false)} className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 
-                    ${location.pathname.startsWith(item.path) && (item.path !== '/' || location.pathname === '/') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>
-                    <item.icon className="w-5 h-5" />
-                    <span className="font-medium">{item.label}</span>
-                  </Link>
+                {navItems.map((item, index) => (
+                  <React.Fragment key={item.path}>
+                    {/* Divisor Simples Mobile */}
+                    {item.path === '/residentes' && <div className="h-px bg-slate-800 my-2 mx-4"></div>}
+                    
+                    <Link 
+                      to={item.path} 
+                      onClick={() => setIsMobileSidebarOpen(false)} 
+                      className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 
+                        ${location.pathname.startsWith(item.path) && (item.path !== '/' || location.pathname === '/') ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}
+                    >
+                      <item.icon className="w-5 h-5" />
+                      <span className="font-medium">{item.label}</span>
+                    </Link>
+                  </React.Fragment>
                 ))}
              </nav>
           </div>

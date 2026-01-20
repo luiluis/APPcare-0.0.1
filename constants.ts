@@ -166,7 +166,8 @@ export const MOCK_STAFF: Staff[] = [
         banco: 'Itaú (341)',
         agencia: '1234',
         conta: '56789-0',
-        pix: '123.456.789-00'
+        pixKeyType: 'cpf',
+        pixKey: '123.456.789-00'
       }
     },
     professionalInfo: {
@@ -204,7 +205,9 @@ export const MOCK_STAFF: Staff[] = [
       bankInfo: {
         banco: 'Banco do Brasil (001)',
         agencia: '4321',
-        conta: '98765-X'
+        conta: '98765-X',
+        pixKeyType: 'aleatoria',
+        pixKey: '7f93b2a1-c840-4b2e-9d8a-1234567890ab'
       }
     },
     professionalInfo: {
@@ -241,7 +244,8 @@ export const MOCK_STAFF: Staff[] = [
         banco: 'Caixa (104)',
         agencia: '0987',
         conta: '1234-5',
-        pix: 'marta@email.com'
+        pixKeyType: 'email',
+        pixKey: 'marta.cozinha@appcare.com'
       }
     }
   }
