@@ -1,110 +1,185 @@
 
-import React, { useState } from 'react';
-import { X, CheckCircle2, Calendar, Wallet, CreditCard } from 'lucide-react';
-import { getLocalISOString } from '../../lib/utils';
+import React, { useState, useEffect } from 'react';
+import { X, CheckCircle2, Calendar, Wallet, CreditCard, DollarSign, Calculator } from 'lucide-react';
+import { getLocalISOString, formatCurrency } from '../../lib/utils';
 import { PaymentConfirmDTO } from '../../types';
 
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (data: PaymentConfirmDTO) => void;
-  totalAmount: number;
-  count: number; // Quantos itens estão sendo baixados
+  onConfirm: (amount: number, data: PaymentConfirmDTO) => void;
+  originalAmount: number; // Valor Total da Fatura
+  paidAmount: number;     // Quanto já foi pago antes
+  remainingAmount: number;// Quanto falta (Original - Pago)
+  count: number;          // Quantos itens selecionados
 }
 
-export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onConfirm, totalAmount, count }) => {
+export const PaymentModal: React.FC<PaymentModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  originalAmount, 
+  paidAmount, 
+  remainingAmount, 
+  count 
+}) => {
+  const [amountToPay, setAmountToPay] = useState<string>('');
+  
   const [formData, setFormData] = useState<PaymentConfirmDTO>({
     paymentDate: getLocalISOString(),
     paymentMethod: 'pix',
     paymentAccount: 'itau_matriz'
   });
 
+  // Ao abrir, sugere o valor restante total
+  useEffect(() => {
+    if (isOpen) {
+      setAmountToPay(remainingAmount.toFixed(2));
+    }
+  }, [isOpen, remainingAmount]);
+
+  const handleConfirm = () => {
+      const value = parseFloat(amountToPay);
+      if (!value || value <= 0) {
+          alert("O valor do pagamento deve ser maior que zero.");
+          return;
+      }
+      if (value > remainingAmount + 0.01) { // Margem pequena pra float
+          if(!confirm("O valor digitado é maior que a dívida restante. Deseja prosseguir mesmo assim?")) return;
+      }
+      onConfirm(value, formData);
+  };
+
   if (!isOpen) return null;
 
+  const isMultiple = count > 1;
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
         
-        <div className="flex justify-between items-center mb-6">
+        {/* Header */}
+        <div className="bg-emerald-600 p-6 text-white flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-100 rounded-xl text-emerald-600">
-              <CheckCircle2 className="w-6 h-6" />
+            <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
+              <CheckCircle2 className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-gray-900">Confirmar Baixa</h3>
-              <p className="text-xs text-gray-500">Conciliação Financeira</p>
+              <h3 className="text-lg font-bold">Registrar Pagamento</h3>
+              <p className="text-emerald-100 text-xs font-medium">
+                {isMultiple ? `${count} itens selecionados` : 'Baixa individual'}
+              </p>
             </div>
           </div>
-          <button onClick={onClose}><X className="w-6 h-6 text-gray-400 hover:text-gray-600" /></button>
+          <button onClick={onClose} className="hover:bg-white/10 p-2 rounded-full transition-colors"><X className="w-5 h-5" /></button>
         </div>
 
-        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6 flex justify-between items-center">
-           <span className="text-gray-600 font-medium text-sm">{count} Lançamento(s) selecionado(s)</span>
-           <span className="text-emerald-700 font-bold text-lg">
-             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAmount)}
-           </span>
-        </div>
-
-        <div className="space-y-5">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Data do Pagamento</label>
-            <div className="relative">
-              <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input 
-                type="date" 
-                className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-gray-900 shadow-sm"
-                value={formData.paymentDate}
-                onChange={e => setFormData({...formData, paymentDate: e.target.value})}
-              />
+        <div className="p-6 space-y-6">
+            
+            {/* Cards de Resumo */}
+            <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Original</p>
+                    <p className="text-sm font-bold text-gray-700">{formatCurrency(originalAmount)}</p>
+                </div>
+                <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                    <p className="text-[10px] uppercase font-bold text-emerald-600 mb-1">Já Pago</p>
+                    <p className="text-sm font-bold text-emerald-700">{formatCurrency(paidAmount)}</p>
+                </div>
+                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                    <p className="text-[10px] uppercase font-bold text-blue-600 mb-1">Restante</p>
+                    <p className="text-sm font-bold text-blue-700">{formatCurrency(remainingAmount)}</p>
+                </div>
             </div>
-          </div>
 
-          <div>
-             <label className="block text-sm font-semibold text-gray-700 mb-2">Forma de Pagamento</label>
-             <div className="relative">
-               <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-               <select 
-                  className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-gray-900 shadow-sm appearance-none"
-                  value={formData.paymentMethod}
-                  onChange={e => setFormData({...formData, paymentMethod: e.target.value})}
-               >
-                 <option value="pix">PIX</option>
-                 <option value="boleto">Boleto Bancário</option>
-                 <option value="transferencia">TED / DOC</option>
-                 <option value="dinheiro">Dinheiro (Espécie)</option>
-                 <option value="cartao_credito">Cartão de Crédito</option>
-                 <option value="cheque">Cheque</option>
-               </select>
-             </div>
-          </div>
+            {/* Input Principal */}
+            <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Valor do Pagamento (R$)</label>
+                <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <span className="text-gray-400 font-bold text-lg">R$</span>
+                    </div>
+                    <input 
+                        type="number"
+                        step="0.01"
+                        className="w-full pl-12 pr-4 py-4 border-2 border-gray-200 rounded-xl text-2xl font-bold text-gray-900 focus:ring-0 focus:border-emerald-500 outline-none transition-all bg-gray-50 focus:bg-white"
+                        placeholder="0.00"
+                        value={amountToPay}
+                        onChange={e => setAmountToPay(e.target.value)}
+                        autoFocus
+                    />
+                    {isMultiple && (
+                        <div className="mt-2 flex items-start gap-2 text-amber-600 text-xs bg-amber-50 p-2 rounded-lg">
+                            <Calculator className="w-3 h-3 mt-0.5" />
+                            <span>Atenção: Para múltiplos itens, o valor será distribuído ou aplicado integralmente.</span>
+                        </div>
+                    )}
+                </div>
+            </div>
 
-          <div>
-             <label className="block text-sm font-semibold text-gray-700 mb-2">Conta de Saída/Entrada</label>
-             <div className="relative">
-               <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-               <select 
-                  className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white text-gray-900 shadow-sm appearance-none"
-                  value={formData.paymentAccount}
-                  onChange={e => setFormData({...formData, paymentAccount: e.target.value})}
-               >
-                 <option value="itau_matriz">Banco Itaú - Matriz</option>
-                 <option value="bb_matriz">Banco do Brasil - Matriz</option>
-                 <option value="cx_filial">Caixinha (Petty Cash) - Filial</option>
-                 <option value="inter_filial">Banco Inter - Filial</option>
-               </select>
-             </div>
-          </div>
+            {/* Detalhes (Data, Método, Conta) */}
+            <div className="space-y-4 pt-2 border-t border-gray-100">
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1.5">Data</label>
+                        <div className="relative">
+                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input 
+                                type="date" 
+                                className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm font-medium focus:border-emerald-500 outline-none"
+                                value={formData.paymentDate}
+                                onChange={e => setFormData({...formData, paymentDate: e.target.value})}
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1.5">Método</label>
+                        <div className="relative">
+                            <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <select 
+                                className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm font-medium focus:border-emerald-500 outline-none bg-white appearance-none"
+                                value={formData.paymentMethod}
+                                onChange={e => setFormData({...formData, paymentMethod: e.target.value})}
+                            >
+                                <option value="pix">PIX</option>
+                                <option value="boleto">Boleto</option>
+                                <option value="dinheiro">Dinheiro</option>
+                                <option value="cartao">Cartão</option>
+                                <option value="transferencia">TED/DOC</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1.5">Conta de Destino/Origem</label>
+                    <div className="relative">
+                        <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <select 
+                            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm font-medium focus:border-emerald-500 outline-none bg-white appearance-none"
+                            value={formData.paymentAccount}
+                            onChange={e => setFormData({...formData, paymentAccount: e.target.value})}
+                        >
+                            <option value="itau_matriz">Banco Itaú - Matriz</option>
+                            <option value="bb_matriz">Banco do Brasil - Matriz</option>
+                            <option value="cx_filial">Caixa Econômica - Filial</option>
+                            <option value="caixinha">Caixinha (Espécie)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
-        <div className="mt-8 flex gap-3">
-          <button onClick={onClose} className="flex-1 py-3 border border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50">
+        <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3.5 border border-gray-300 rounded-xl font-bold text-gray-700 hover:bg-white transition-colors">
             Cancelar
           </button>
           <button 
-            onClick={() => onConfirm(formData)}
-            className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md shadow-emerald-200 transition-all hover:-translate-y-0.5"
+            onClick={handleConfirm}
+            className="flex-[2] py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5"
           >
-            Confirmar Baixa
+            <CheckCircle2 className="w-5 h-5" /> Confirmar Baixa
           </button>
         </div>
 

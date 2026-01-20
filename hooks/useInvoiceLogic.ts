@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Invoice, InvoiceItem, InvoiceStatus, InvoiceCategory, CreateInvoiceDTO, QuickConsumeDTO, PaymentConfirmDTO } from '../types';
+import { Invoice, InvoiceItem, InvoiceStatus, InvoiceCategory, CreateInvoiceDTO, QuickConsumeDTO, PaymentConfirmDTO, InvoicePayment } from '../types';
 import { getLocalISOString } from '../lib/utils';
 
 interface UseInvoiceLogicProps {
@@ -57,7 +57,8 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
           date: dueDateString
         }],
         attachmentUrl: mockAttachmentUrl,
-        supplier: data.supplier // Mapeando fornecedor
+        supplier: data.supplier, // Mapeando fornecedor
+        payments: [] // Inicializado vazio
       });
     }
 
@@ -88,8 +89,6 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
     let updatedInvoices = [...invoices];
     
     // Mock URL se houver anexo (apenas para o item, embora o ERP mostre na fatura)
-    // Num sistema real, cada item poderia ter seu anexo, ou a fatura acumularia anexos.
-    // Aqui vamos simplificar: se não tem anexo na fatura principal, esse passa a ser.
     const mockAttachmentUrl = data.attachment ? URL.createObjectURL(data.attachment) : undefined;
 
     if (targetInvoiceIndex >= 0) {
@@ -134,7 +133,8 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
           category: data.category as InvoiceCategory,
           date: data.date
         }],
-        attachmentUrl: mockAttachmentUrl
+        attachmentUrl: mockAttachmentUrl,
+        payments: [] // Inicializado vazio
       };
       updatedInvoices.push(newInvoice);
     }
@@ -149,16 +149,82 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
     onUpdateInvoices(updatedInvoices);
   };
 
+  /**
+   * Registra um pagamento (parcial ou total) em uma fatura.
+   * Calcula automaticamente o saldo e atualiza o status.
+   */
+  const registerPayment = (invoiceId: string, amount: number, method: string, date: string, notes?: string) => {
+    const updatedInvoices = invoices.map(inv => {
+      if (inv.id !== invoiceId) return inv;
+
+      const newPayment: InvoicePayment = {
+        id: `pay-${Date.now()}`,
+        amount: amount,
+        date: date,
+        method: method,
+        notes: notes
+      };
+
+      const currentPayments = inv.payments || [];
+      const updatedPayments = [...currentPayments, newPayment];
+      
+      // Recalcula o total pago
+      const totalPaid = updatedPayments.reduce((acc, curr) => acc + curr.amount, 0);
+      
+      // Verifica se quitou (com margem de segurança para float points)
+      const isFullyPaid = totalPaid >= (inv.totalAmount - 0.01);
+
+      return {
+        ...inv,
+        payments: updatedPayments,
+        paidAmount: totalPaid,
+        status: isFullyPaid ? InvoiceStatus.PAID : InvoiceStatus.PENDING,
+        // Atualiza campos legados para facilidade de visualização na tabela principal
+        paymentDate: date,
+        paymentMethod: method
+      };
+    });
+    
+    onUpdateInvoices(updatedInvoices);
+  };
+
+  /**
+   * Baixa em lote (compatibilidade com dashboard).
+   * Registra o valor restante integral como pagamento.
+   */
   const markAsPaidBatch = (invoiceIds: string[], paymentDetails: PaymentConfirmDTO) => {
-    const updatedInvoices = invoices.map(inv => 
-      invoiceIds.includes(inv.id) ? { 
+    const updatedInvoices = invoices.map(inv => {
+      if (!invoiceIds.includes(inv.id)) return inv;
+
+      // Calcula quanto falta pagar
+      const alreadyPaid = (inv.payments || []).reduce((acc, p) => acc + p.amount, 0);
+      const remainingAmount = inv.totalAmount - alreadyPaid;
+
+      if (remainingAmount <= 0) {
+          // Se já está pago, apenas garante o status (idempotência)
+          return { ...inv, status: InvoiceStatus.PAID };
+      }
+
+      const newPayment: InvoicePayment = {
+        id: `pay-batch-${Date.now()}-${inv.id}`,
+        amount: remainingAmount,
+        date: paymentDetails.paymentDate,
+        method: paymentDetails.paymentMethod,
+        notes: 'Baixa em lote'
+      };
+
+      const updatedPayments = [...(inv.payments || []), newPayment];
+
+      return { 
         ...inv, 
         status: InvoiceStatus.PAID,
+        payments: updatedPayments,
+        paidAmount: inv.totalAmount, // Agora está 100% pago
         paymentDate: paymentDetails.paymentDate,
         paymentMethod: paymentDetails.paymentMethod,
         paymentAccount: paymentDetails.paymentAccount
-      } : inv
-    );
+      };
+    });
     onUpdateInvoices(updatedInvoices);
   };
 
@@ -166,6 +232,7 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
     createRecurringInvoices,
     addQuickConsume,
     updateInvoiceStatus,
-    markAsPaidBatch
+    markAsPaidBatch,
+    registerPayment
   };
 };

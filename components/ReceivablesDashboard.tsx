@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   FileText, PlusCircle, Clock, Search, Check, 
   ArrowUpCircle, ArrowDownCircle, 
-  Calendar, Download, Printer
+  Calendar, Download, Printer, Filter
 } from 'lucide-react';
 import { Invoice, Resident, InvoiceStatus, InvoiceCategory, PaymentConfirmDTO } from '../types';
 import { BRANCHES } from '../constants';
@@ -38,11 +38,11 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
     newInvoice: false,
     newInvoiceType: 'income' as 'income' | 'expense',
     details: null as Invoice | null,
-    payment: false, // Controls the new PaymentModal
-    paymentTargetIds: [] as string[] // IDs to be paid (can be single or bulk)
+    payment: false,
+    paymentTargetIds: [] as string[]
   });
 
-  const { createRecurringInvoices, addQuickConsume, updateInvoiceStatus, markAsPaidBatch } = useInvoiceLogic({
+  const { createRecurringInvoices, addQuickConsume, updateInvoiceStatus, markAsPaidBatch, registerPayment } = useInvoiceLogic({
     invoices: allInvoices,
     onUpdateInvoices
   });
@@ -51,13 +51,9 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
   const filteredInvoices = useMemo(() => {
     return invoices
       .filter(inv => {
-        // Date Range
         const inDate = inv.dueDate >= startDate && inv.dueDate <= endDate;
-        // Status Filter
         const inStatus = statusFilter === 'all' || inv.status === statusFilter;
-        // Category Filter (Checks if any item in invoice matches)
         const inCategory = categoryFilter === 'all' || inv.items.some(item => item.category === categoryFilter);
-        
         return inDate && inStatus && inCategory;
       })
       .map(inv => {
@@ -77,11 +73,15 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
 
   // --- STATS CALCULATION ---
   const stats = useMemo(() => {
-    const incomePaid = filteredInvoices.filter(i => i.type === 'income' && i.status === InvoiceStatus.PAID).reduce((acc, c) => acc + c.totalAmount, 0);
-    const expensePaid = filteredInvoices.filter(i => i.type === 'expense' && i.status === InvoiceStatus.PAID).reduce((acc, c) => acc + c.totalAmount, 0);
-    const pendingIncome = filteredInvoices.filter(i => i.type === 'income' && i.status !== InvoiceStatus.PAID).reduce((acc, c) => acc + c.totalAmount, 0);
-    const pendingExpense = filteredInvoices.filter(i => i.type === 'expense' && i.status !== InvoiceStatus.PAID).reduce((acc, c) => acc + c.totalAmount, 0);
-    const overdue = filteredInvoices.filter(i => i.status === InvoiceStatus.OVERDUE).reduce((acc, c) => acc + c.totalAmount, 0);
+    // Para simplificar, o KPI considera o saldo restante como pendente
+    const incomePaid = filteredInvoices.filter(i => i.type === 'income' && i.status === InvoiceStatus.PAID).reduce((acc, c) => acc + (c.paidAmount || c.totalAmount), 0);
+    const expensePaid = filteredInvoices.filter(i => i.type === 'expense' && i.status === InvoiceStatus.PAID).reduce((acc, c) => acc + (c.paidAmount || c.totalAmount), 0);
+    
+    // Pendente = Total - Pago (mesmo que seja parcial)
+    const pendingIncome = filteredInvoices.filter(i => i.type === 'income' && i.status !== InvoiceStatus.PAID).reduce((acc, c) => acc + (c.totalAmount - (c.paidAmount || 0)), 0);
+    const pendingExpense = filteredInvoices.filter(i => i.type === 'expense' && i.status !== InvoiceStatus.PAID).reduce((acc, c) => acc + (c.totalAmount - (c.paidAmount || 0)), 0);
+    
+    const overdue = filteredInvoices.filter(i => i.status === InvoiceStatus.OVERDUE).reduce((acc, c) => acc + (c.totalAmount - (c.paidAmount || 0)), 0);
 
     return { balance: incomePaid - expensePaid, pendingIncome, pendingExpense, overdue };
   }, [filteredInvoices]);
@@ -97,11 +97,8 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
 
   const handleSelectOne = (id: string) => {
     const newSet = new Set(selectedIds);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
     setSelectedIds(newSet);
   };
 
@@ -113,47 +110,61 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
     }));
   };
 
-  const handlePaymentConfirm = (paymentDetails: PaymentConfirmDTO) => {
-    markAsPaidBatch(modalState.paymentTargetIds, paymentDetails);
+  // Handler Atualizado para suportar o novo Modal
+  const handlePaymentConfirm = (amount: number, paymentDetails: PaymentConfirmDTO) => {
+    const { paymentTargetIds } = modalState;
+
+    if (paymentTargetIds.length === 1) {
+        // Pagamento Individual (Suporta Parcial)
+        registerPayment(
+            paymentTargetIds[0], 
+            amount, 
+            paymentDetails.paymentMethod, 
+            paymentDetails.paymentDate
+        );
+    } else {
+        // Pagamento em Lote (Mantém lógica anterior de baixa total para simplificar)
+        // Em um app real, distribuiria o valor, mas aqui assumimos baixa de todos
+        markAsPaidBatch(paymentTargetIds, paymentDetails);
+    }
     
     // Cleanup
     setSelectedIds(new Set()); 
     setModalState(s => ({ ...s, payment: false, paymentTargetIds: [], details: null }));
   };
 
+  // --- CÁLCULOS PARA O MODAL DE PAGAMENTO ---
+  const paymentCalculation = useMemo(() => {
+      const targets = allInvoices.filter(inv => modalState.paymentTargetIds.includes(inv.id));
+      
+      const original = targets.reduce((acc, curr) => acc + curr.totalAmount, 0);
+      const paid = targets.reduce((acc, curr) => acc + (curr.paidAmount || 0), 0);
+      const remaining = original - paid;
+
+      return { original, paid, remaining, count: targets.length };
+  }, [allInvoices, modalState.paymentTargetIds]);
+
   const handleExportCSV = () => {
-    const headers = ["ID", "Tipo", "Data Vencimento", "Descricao", "Categoria", "Valor", "Status", "Data Pagamento", "Metodo"];
+    const headers = ["ID", "Tipo", "Vencimento", "Descricao", "Valor Total", "Valor Pago", "Status"];
     const rows = filteredInvoices.map(inv => [
       inv.id,
-      inv.type === 'income' ? 'Receita' : 'Despesa',
+      inv.type,
       inv.dueDate,
       inv.items[0].description,
-      inv.items[0].category,
       inv.totalAmount.toFixed(2),
-      inv.status,
-      inv.paymentDate || '-',
-      inv.paymentMethod || '-'
+      (inv.paidAmount || 0).toFixed(2),
+      inv.status
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + headers.join(",") + "\n" 
-      + rows.map(e => e.join(",")).join("\n");
-
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `financeiro_export_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute("download", `financeiro.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
-
-  // Calculate total for payment modal
-  const paymentTotalAmount = useMemo(() => {
-    return allInvoices
-      .filter(inv => modalState.paymentTargetIds.includes(inv.id))
-      .reduce((acc, curr) => acc + curr.totalAmount, 0);
-  }, [allInvoices, modalState.paymentTargetIds]);
 
   const getStatusColor = (status: string) => {
     if (status === InvoiceStatus.PAID) return 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200';
@@ -161,10 +172,11 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
     return 'bg-amber-100 text-amber-700 ring-1 ring-amber-200';
   };
 
-  const getStatusLabel = (status: string, type: string) => {
-    if (status === InvoiceStatus.PAID) return type === 'income' ? 'Recebido' : 'Pago';
+  const getStatusLabel = (status: string, paidAmount: number = 0, totalAmount: number) => {
+    if (status === InvoiceStatus.PAID) return 'Pago';
+    if (paidAmount > 0 && paidAmount < totalAmount) return 'Parcial'; // Novo Label Visual
     if (status === InvoiceStatus.OVERDUE) return 'Atrasado';
-    return type === 'income' ? 'A Receber' : 'A Pagar';
+    return 'Pendente';
   };
 
   return (
@@ -249,14 +261,12 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
               <button 
                 onClick={() => setModalState(s => ({ ...s, newInvoice: true, newInvoiceType: 'income' }))}
                 className="h-11 px-4 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md shadow-blue-200 transition-all hover:-translate-y-0.5 font-bold text-sm"
-                title="Nova Receita / Extra"
               >
                 <PlusCircle className="w-5 h-5" /> Nova Receita
               </button>
               <button 
                 onClick={() => setModalState(s => ({ ...s, newInvoice: true, newInvoiceType: 'expense' }))}
                 className="h-11 px-4 flex items-center justify-center gap-2 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl transition-all font-bold text-sm"
-                title="Nova Despesa"
               >
                 <ArrowDownCircle className="w-5 h-5" /> Nova Despesa
               </button>
@@ -264,39 +274,27 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
         </div>
       </div>
 
-      {/* --- KPI CARDS (CLICKABLE) --- */}
+      {/* --- KPI CARDS --- */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-        <div 
-          onClick={() => setStatusFilter(InvoiceStatus.PAID)} 
-          className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:shadow-md transition-all group"
-        >
+        <div onClick={() => setStatusFilter(InvoiceStatus.PAID)} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:shadow-md transition-all group">
           <p className="text-gray-500 text-sm font-medium group-hover:text-gray-700">Saldo Realizado</p>
           <div className="mt-2 text-3xl font-bold tracking-tight text-emerald-600">{formatCurrency(stats.balance)}</div>
         </div>
-        <div 
-           onClick={() => { setStatusFilter(InvoiceStatus.PENDING); setModalState(s => ({...s, newInvoiceType: 'income'})); }}
-           className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm border-l-4 border-l-blue-500 cursor-pointer hover:shadow-md transition-all group"
-        >
-            <p className="text-gray-500 text-sm font-medium group-hover:text-blue-800">A Receber</p>
+        <div onClick={() => { setStatusFilter(InvoiceStatus.PENDING); setModalState(s => ({...s, newInvoiceType: 'income'})); }} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm border-l-4 border-l-blue-500 cursor-pointer hover:shadow-md transition-all group">
+            <p className="text-gray-500 text-sm font-medium group-hover:text-blue-800">A Receber (Pendente)</p>
             <div className="mt-2 text-3xl font-bold tracking-tight text-blue-700">{formatCurrency(stats.pendingIncome)}</div>
         </div>
-        <div 
-           onClick={() => { setStatusFilter(InvoiceStatus.PENDING); setModalState(s => ({...s, newInvoiceType: 'expense'})); }}
-           className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm border-l-4 border-l-amber-400 cursor-pointer hover:shadow-md transition-all group"
-        >
-            <p className="text-gray-500 text-sm font-medium group-hover:text-amber-800">A Pagar</p>
+        <div onClick={() => { setStatusFilter(InvoiceStatus.PENDING); setModalState(s => ({...s, newInvoiceType: 'expense'})); }} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm border-l-4 border-l-amber-400 cursor-pointer hover:shadow-md transition-all group">
+            <p className="text-gray-500 text-sm font-medium group-hover:text-amber-800">A Pagar (Pendente)</p>
             <div className="mt-2 text-3xl font-bold tracking-tight text-amber-700">{formatCurrency(stats.pendingExpense)}</div>
         </div>
-        <div 
-           onClick={() => setStatusFilter(InvoiceStatus.OVERDUE)}
-           className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm border-l-4 border-l-rose-500 cursor-pointer hover:shadow-md transition-all group"
-        >
+        <div onClick={() => setStatusFilter(InvoiceStatus.OVERDUE)} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm border-l-4 border-l-rose-500 cursor-pointer hover:shadow-md transition-all group">
           <p className="text-gray-500 text-sm font-medium group-hover:text-rose-800">Em Atraso</p>
           <div className="mt-2 text-3xl font-bold tracking-tight text-rose-700">{formatCurrency(stats.overdue)}</div>
         </div>
       </div>
 
-      {/* --- BULK ACTIONS FLOATING BAR --- */}
+      {/* --- BULK ACTIONS --- */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl z-40 flex items-center gap-6 animate-in slide-in-from-bottom-4 duration-300">
           <div className="flex items-center gap-3">
@@ -310,9 +308,7 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
              >
                <Check className="w-4 h-4" /> Baixar
              </button>
-             <button 
-               className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl font-medium text-sm transition-colors"
-             >
+             <button className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl font-medium text-sm transition-colors">
                <Printer className="w-4 h-4" /> Imprimir
              </button>
           </div>
@@ -326,12 +322,7 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
             <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase tracking-wider border-b border-gray-200">
               <tr>
                 <th className="px-6 py-5 w-16 text-center">
-                  <input 
-                    type="checkbox" 
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
-                    onChange={handleSelectAll}
-                    checked={filteredInvoices.length > 0 && selectedIds.size === filteredInvoices.length}
-                  />
+                  <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" onChange={handleSelectAll} checked={filteredInvoices.length > 0 && selectedIds.size === filteredInvoices.length} />
                 </th>
                 <th className="px-2 py-5">Descrição</th>
                 <th className="px-6 py-5">Categoria</th>
@@ -342,19 +333,18 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredInvoices.length > 0 ? filteredInvoices.map((inv: any) => (
+              {filteredInvoices.length > 0 ? filteredInvoices.map((inv: any) => {
+                  const paid = inv.paidAmount || 0;
+                  const isPartial = paid > 0 && paid < inv.totalAmount;
+                  
+                  return (
                   <tr 
                     key={inv.id} 
                     className={`hover:bg-blue-50/30 group transition-colors ${selectedIds.has(inv.id) ? 'bg-blue-50/50' : ''}`}
-                    onClick={() => handleSelectOne(inv.id)} // Row click selects too
+                    onClick={() => handleSelectOne(inv.id)}
                   >
                     <td className="px-6 py-5 text-center" onClick={e => e.stopPropagation()}>
-                       <input 
-                        type="checkbox" 
-                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300 bg-white"
-                        checked={selectedIds.has(inv.id)}
-                        onChange={() => handleSelectOne(inv.id)}
-                       />
+                       <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300 bg-white" checked={selectedIds.has(inv.id)} onChange={() => handleSelectOne(inv.id)} />
                     </td>
                     <td className="px-2 py-5">
                       <div className="flex items-center gap-4">
@@ -378,11 +368,18 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
                     </td>
                     <td className="px-6 py-5">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${getStatusColor(inv.status)}`}>
-                        {getStatusLabel(inv.status, inv.type)}
+                        {getStatusLabel(inv.status, paid, inv.totalAmount)}
                       </span>
                     </td>
-                    <td className={`px-6 py-5 text-right text-base font-bold ${inv.type === 'income' ? 'text-gray-900' : 'text-rose-600'}`}>
-                      {inv.type === 'expense' && '- '}{formatCurrency(inv.totalAmount)}
+                    <td className="px-6 py-5 text-right">
+                      <div className={`text-base font-bold ${inv.type === 'income' ? 'text-gray-900' : 'text-rose-600'}`}>
+                        {inv.type === 'expense' && '- '}{formatCurrency(inv.totalAmount)}
+                      </div>
+                      {isPartial && (
+                          <div className="text-xs text-emerald-600 font-bold">
+                              Pago: {formatCurrency(paid)}
+                          </div>
+                      )}
                     </td>
                     <td className="px-6 py-5 text-center" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-center items-center gap-3">
@@ -406,8 +403,8 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
                       </div>
                     </td>
                   </tr>
-              )) : (
-                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-500">Nenhum lançamento encontrado para os filtros selecionados.</td></tr>
+              )}) : (
+                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-500">Nenhum lançamento encontrado.</td></tr>
               )}
             </tbody>
         </table>
@@ -430,12 +427,15 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
         onPay={() => initiatePayment(modalState.details ? [modalState.details.id] : [])}
       />
 
+      {/* Novo Modal de Pagamento com Suporte a Parcial */}
       <PaymentModal 
         isOpen={modalState.payment}
         onClose={() => setModalState(s => ({ ...s, payment: false, paymentTargetIds: [] }))}
         onConfirm={handlePaymentConfirm}
-        count={modalState.paymentTargetIds.length}
-        totalAmount={paymentTotalAmount}
+        count={paymentCalculation.count}
+        originalAmount={paymentCalculation.original}
+        paidAmount={paymentCalculation.paid}
+        remainingAmount={paymentCalculation.remaining}
       />
 
     </div>

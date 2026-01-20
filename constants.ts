@@ -335,5 +335,16 @@ export const MOCK_INVOICES: Invoice[] = MOCK_RESIDENTS.map((r, i) => {
   const baseAmount = r.feeConfig ? (r.feeConfig.baseValue + r.feeConfig.careLevelAdjustment + r.feeConfig.fixedExtras - r.feeConfig.discount) : (r.benefitValue || 0);
   const items: InvoiceItem[] = [{ id: `item-base-${i}`, invoiceId: `inv-${i}`, description: 'Mensalidade Base', amount: baseAmount, category: 'mensalidade', date: '2023-10-01' }];
   const status = i === 0 ? 'pending' : 'paid';
-  return { id: `inv-${i}`, type: 'income', residentId: r.id, month: 10, year: 2023, status: status as 'overdue' | 'pending' | 'paid', dueDate: '2023-10-05', totalAmount: baseAmount, items };
+  return { 
+    id: `inv-${i}`, 
+    type: 'income', 
+    residentId: r.id, 
+    month: 10, 
+    year: 2023, 
+    status: status as 'overdue' | 'pending' | 'paid', 
+    dueDate: '2023-10-05', 
+    totalAmount: baseAmount, 
+    items,
+    payments: [] // Initialized for compatibility
+  };
 });

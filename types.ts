@@ -191,6 +191,14 @@ export interface InvoiceItem {
   date: string;
 }
 
+export interface InvoicePayment {
+  id: string;
+  amount: number;
+  date: string;
+  method: string;
+  notes?: string;
+}
+
 export interface Invoice {
   id: string;
   type: 'income' | 'expense';
@@ -202,6 +210,8 @@ export interface Invoice {
   dueDate: string;
   totalAmount: number;
   items: InvoiceItem[];
+  payments: InvoicePayment[];
+  paidAmount?: number;
   paymentDate?: string;
   paymentMethod?: string;
   paymentAccount?: string;

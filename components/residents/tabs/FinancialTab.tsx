@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
 import { Resident, Invoice, Contact, InvoiceStatus, FeeConfig } from '../../../types';
-import { User, Phone, Mail, MapPin, CreditCard, Edit2, Save, Receipt, CheckCircle2, AlertCircle, X, Calculator, Percent, Banknote, Plus, Calendar } from 'lucide-react';
+import { User, Phone, Mail, MapPin, CreditCard, Edit2, Save, Receipt, CheckCircle2, AlertCircle, X, Calculator, Percent, Banknote, Plus, Calendar, PieChart, Download } from 'lucide-react';
 import { formatDateBr, formatCurrency } from '../../../lib/utils';
+import { generateInvoiceReceipt } from '../../../lib/pdfService';
 
 interface FinancialTabProps {
   resident: Resident;
@@ -297,18 +298,38 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
                                 <th className="px-6 py-3">Descrição</th>
                                 <th className="px-6 py-3">Valor</th>
                                 <th className="px-6 py-3 text-center">Status</th>
+                                <th className="px-6 py-3 text-center">Recibo</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {residentInvoices.map(inv => (
+                            {residentInvoices.map(inv => {
+                                const paidAmount = inv.paidAmount || 0;
+                                const isPartial = paidAmount > 0 && paidAmount < inv.totalAmount;
+
+                                return (
                                 <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
                                     <td className="px-6 py-4 text-gray-600 font-medium">{formatDateBr(inv.dueDate)}</td>
                                     <td className="px-6 py-4 text-gray-900 font-semibold">{inv.items[0]?.description}</td>
-                                    <td className="px-6 py-4 text-gray-900 font-bold">{formatCurrency(inv.totalAmount)}</td>
+                                    
+                                    {/* Coluna Valor (Com destaque para parcial) */}
+                                    <td className="px-6 py-4">
+                                        <div className="text-gray-900 font-bold">{formatCurrency(inv.totalAmount)}</div>
+                                        {paidAmount > 0 && (
+                                            <div className="text-xs font-medium text-emerald-600 mt-0.5">
+                                                Pago: {formatCurrency(paidAmount)}
+                                            </div>
+                                        )}
+                                    </td>
+
+                                    {/* Coluna Status (Com badge parcial) */}
                                     <td className="px-6 py-4 text-center">
                                         {inv.status === InvoiceStatus.PAID ? (
                                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
                                                 <CheckCircle2 className="w-3 h-3" /> Pago
+                                            </span>
+                                        ) : isPartial ? (
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200">
+                                                <PieChart className="w-3 h-3" /> Parcial
                                             </span>
                                         ) : inv.status === InvoiceStatus.OVERDUE ? (
                                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold">
@@ -320,8 +341,21 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
                                             </span>
                                         )}
                                     </td>
+
+                                    {/* Coluna Recibo (Novo) */}
+                                    <td className="px-6 py-4 text-center">
+                                        {inv.status === InvoiceStatus.PAID && (
+                                            <button 
+                                                onClick={() => generateInvoiceReceipt(inv, resident.name)}
+                                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors group"
+                                                title="Baixar Recibo"
+                                            >
+                                                <Download className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                            </button>
+                                        )}
+                                    </td>
                                 </tr>
-                            ))}
+                            )})}
                         </tbody>
                     </table>
                 ) : (
