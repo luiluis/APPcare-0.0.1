@@ -120,6 +120,16 @@ export const formatPhone = (value: string): string => {
 };
 
 /**
+ * Aplica máscara de CEP (00000-000)
+ */
+export const formatCEP = (value: string): string => {
+  return value
+    .replace(/\D/g, '')
+    .replace(/^(\d{5})(\d)/, '$1-$2')
+    .substring(0, 9);
+};
+
+/**
  * Retorna o primeiro dia do mês atual em formato ISO.
  */
 export const getFirstDayOfMonth = (): string => {

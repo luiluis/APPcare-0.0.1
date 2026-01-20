@@ -180,7 +180,7 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
              <div className="relative">
                 <input 
                   type="date" 
-                  className="pl-3 pr-2 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm bg-white hover:border-gray-300 transition-colors"
+                  className="pl-3 pr-2 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm bg-white hover:border-gray-300 transition-colors"
                   value={startDate} 
                   onChange={e => setStartDate(e.target.value)} 
                 />
@@ -189,7 +189,7 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
              <div className="relative">
                 <input 
                   type="date" 
-                  className="pl-3 pr-2 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm bg-white hover:border-gray-300 transition-colors"
+                  className="pl-3 pr-2 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm bg-white hover:border-gray-300 transition-colors"
                   value={endDate} 
                   onChange={e => setEndDate(e.target.value)} 
                 />
@@ -199,7 +199,7 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
            {/* Dropdowns */}
            <div className="flex gap-2">
              <select 
-               className="py-2.5 px-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none shadow-sm cursor-pointer hover:border-gray-300"
+               className="py-2.5 px-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 outline-none shadow-sm cursor-pointer hover:border-gray-300"
                value={statusFilter}
                onChange={e => setStatusFilter(e.target.value)}
              >
@@ -210,7 +210,7 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
              </select>
 
              <select 
-               className="py-2.5 px-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none shadow-sm cursor-pointer hover:border-gray-300"
+               className="py-2.5 px-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 outline-none shadow-sm cursor-pointer hover:border-gray-300"
                value={categoryFilter}
                onChange={e => setCategoryFilter(e.target.value)}
              >
@@ -229,7 +229,7 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
               <input 
                 type="text"
                 placeholder="Buscar..."
-                className="w-full pl-10 pr-4 h-11 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                className="w-full pl-10 pr-4 h-11 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm bg-white text-gray-900 placeholder-gray-400"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -351,7 +351,7 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
                     <td className="px-6 py-5 text-center" onClick={e => e.stopPropagation()}>
                        <input 
                         type="checkbox" 
-                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300 bg-white"
                         checked={selectedIds.has(inv.id)}
                         onChange={() => handleSelectOne(inv.id)}
                        />

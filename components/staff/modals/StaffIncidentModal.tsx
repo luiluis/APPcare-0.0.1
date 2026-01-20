@@ -114,7 +114,7 @@ export const StaffIncidentModal: React.FC<StaffIncidentModalProps> = ({ isOpen, 
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Data do Evento</label>
                 <input 
                    type="date"
-                   className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 font-medium"
+                   className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900 font-medium"
                    value={date}
                    onChange={e => setDate(e.target.value)}
                 />
@@ -124,7 +124,7 @@ export const StaffIncidentModal: React.FC<StaffIncidentModalProps> = ({ isOpen, 
           <div>
              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Descrição</label>
              <textarea 
-               className="w-full border border-gray-200 rounded-xl p-4 outline-none focus:ring-2 focus:ring-blue-500 h-32 resize-none"
+               className="w-full border border-gray-200 rounded-xl p-4 outline-none focus:ring-2 focus:ring-blue-500 h-32 resize-none bg-white text-gray-900"
                placeholder="Descreva o motivo, dias de afastamento ou detalhes..."
                value={description}
                onChange={e => setDescription(e.target.value)}

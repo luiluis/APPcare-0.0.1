@@ -127,7 +127,7 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
   };
 
   const getVitalStatusColor = (type: 'pressure' | 'glucose', value: string) => {
-      if (!value) return 'border-gray-200';
+      if (!value) return 'border-gray-200 bg-white text-gray-900';
       const num = parseInt(value);
       if (type === 'pressure') {
           const sys = parseInt(value.split('/')[0]);
@@ -251,7 +251,7 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                     <input 
                     type="text" 
                     placeholder="Filtrar residentes..."
-                    className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-gray-100 focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 placeholder-gray-400"
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                     />
@@ -434,7 +434,7 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                             <td className="px-4 py-4">
                                <input 
                                  type="number"
-                                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-700"
+                                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-700 bg-white"
                                  placeholder={String(r.medicalRecord?.lastVitals.heartRate || "70")}
                                  value={vitalsInput[r.id]?.heartRate || ''}
                                  onChange={e => handleVitalChange(r.id, 'heartRate', e.target.value)}
@@ -538,7 +538,7 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Residente</label>
                         <select 
-                            className="w-full border rounded-lg p-2.5 outline-none bg-white"
+                            className="w-full border rounded-lg p-2.5 outline-none bg-white text-gray-900 font-medium"
                             onChange={e => setManualEntryForm({...manualEntryForm, residentId: e.target.value})}
                         >
                             <option value="">Selecione...</option>
@@ -548,7 +548,7 @@ export const DailyRoutineDashboard: React.FC<DailyRoutineDashboardProps> = ({ re
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Nota</label>
                         <textarea 
-                            className="w-full border rounded-lg p-3 outline-none h-24 resize-none"
+                            className="w-full border rounded-lg p-3 outline-none h-24 resize-none bg-white text-gray-900 font-medium"
                             placeholder="Descreva o que foi realizado..."
                             value={manualEntryForm.note}
                             onChange={e => setManualEntryForm({...manualEntryForm, note: e.target.value})}

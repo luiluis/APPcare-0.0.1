@@ -37,6 +37,9 @@ export const QuickConsumeModal: React.FC<QuickConsumeModalProps> = ({ isOpen, on
     onClose();
   };
 
+  // Shared Style for Inputs/Selects
+  const inputClass = "w-full border border-gray-300 rounded-xl px-4 py-3 outline-none bg-white text-gray-900 font-medium placeholder-gray-400 focus:ring-2 focus:ring-amber-500 transition-all";
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
@@ -59,7 +62,7 @@ export const QuickConsumeModal: React.FC<QuickConsumeModalProps> = ({ isOpen, on
           <div>
              <label className="block text-sm font-semibold text-gray-700 mb-2">Unidade</label>
              <select 
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 outline-none"
+                className={inputClass}
                 value={formData.branchId}
                 onChange={e => setFormData({...formData, branchId: e.target.value, residentId: ''})}
              >
@@ -70,7 +73,7 @@ export const QuickConsumeModal: React.FC<QuickConsumeModalProps> = ({ isOpen, on
           <div>
              <label className="block text-sm font-semibold text-gray-700 mb-2">Residente</label>
              <select 
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 outline-none"
+                className={inputClass}
                 value={formData.residentId}
                 onChange={e => setFormData({...formData, residentId: e.target.value})}
              >
@@ -85,7 +88,7 @@ export const QuickConsumeModal: React.FC<QuickConsumeModalProps> = ({ isOpen, on
                 <input 
                   type="text"
                   placeholder="Ex: Fralda G"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-3 outline-none"
+                  className={inputClass}
                   value={formData.description}
                   onChange={e => setFormData({...formData, description: e.target.value})}
                 />
@@ -95,7 +98,7 @@ export const QuickConsumeModal: React.FC<QuickConsumeModalProps> = ({ isOpen, on
                 <input 
                   type="number"
                   placeholder="0.00"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-3 outline-none"
+                  className={inputClass}
                   value={formData.amount}
                   onChange={e => setFormData({...formData, amount: e.target.value})}
                 />

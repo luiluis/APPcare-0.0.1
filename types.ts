@@ -223,6 +223,26 @@ export interface FinancialRecord {
 
 // --- RH / STAFF MODULE ---
 
+export interface Dependent {
+  id: string;
+  name: string;
+  birthDate: string;
+  relation: 'filho' | 'conjuge' | 'outro';
+}
+
+export interface StaffBenefits {
+  receivesTransportVoucher: boolean; // Vale Transporte
+  transportVoucherDailyQty?: number;
+  transportVoucherUnitValue?: number;
+  receivesMealVoucher: boolean; // Vale Refeição
+}
+
+export interface StaffSystemAccess {
+  allowed: boolean;
+  accessLevel: 'admin' | 'financeiro' | 'enfermagem' | 'basico';
+  loginEmail: string;
+}
+
 export interface Staff {
   id: string;
   name: string;
@@ -241,7 +261,7 @@ export interface Staff {
     email: string;
     address: string;
     maritalStatus: 'solteiro' | 'casado' | 'divorciado' | 'viuvo' | 'uniao_estavel';
-    childrenCount: number;
+    childrenCount: number; // Mantido para compatibilidade, mas o array dependents é mais preciso
   };
 
   // Dados Contratuais
@@ -252,6 +272,9 @@ export interface Staff {
     scale: '12x36' | '6x1' | '5x2' | 'outra';
     workShift: 'diurno' | 'noturno';
   };
+
+  // Acesso ao Sistema (Novo)
+  systemAccess?: StaffSystemAccess;
 
   // Financeiro
   financialInfo?: {
@@ -265,6 +288,10 @@ export interface Staff {
       pixKey?: string;
     };
   };
+
+  // Novo Módulo CLT
+  benefits?: StaffBenefits;
+  dependents?: Dependent[];
 
   // Profissional
   professionalInfo?: {

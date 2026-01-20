@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Staff } from '../../types';
-import { User, Phone, MapPin, Calendar, Briefcase, CreditCard, Building, Edit2, Save, X, Check, AlertOctagon, Power, RefreshCw, Palmtree, CheckCircle2, Zap, Landmark } from 'lucide-react';
+import { Staff, Dependent } from '../../types';
+import { User, Phone, MapPin, Calendar, Briefcase, CreditCard, Building, Edit2, Check, AlertOctagon, Power, RefreshCw, Palmtree, CheckCircle2, Zap, Landmark, Copy, Bus, Utensils, Baby, Trash2, Plus, Shield, Lock, Key, AlertCircle, X } from 'lucide-react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { formatCPF, formatPhone } from '../../lib/utils';
 
@@ -15,6 +15,10 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
   const [formData, setFormData] = useState<Staff>(staff);
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  
+  // State temporário para novo dependente
+  const [newDependent, setNewDependent] = useState<Partial<Dependent>>({ name: '', relation: 'filho', birthDate: '' });
+  const [isAddingDependent, setIsAddingDependent] = useState(false);
 
   // Sincroniza o form se a prop staff mudar externamente
   useEffect(() => {
@@ -28,7 +32,7 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
     if (field === 'cpf') formattedValue = formatCPF(value);
     if (field === 'phone') formattedValue = formatPhone(value);
 
-    // Lógica Inteligente para Pix (UX Bônus)
+    // Lógica Inteligente para Pix (UX Bônus - Auto-preenchimento ao mudar o tipo)
     if (nestedField === 'pixKeyType') {
         let suggestedKey = '';
         const personal = formData.personalInfo;
@@ -57,7 +61,7 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
     setFormData(prev => {
       const sectionData = prev[section] as any;
       
-      // Caso especial para bankInfo que é aninhado dentro de financialInfo
+      // Caso especial para objetos aninhados (bankInfo ou benefits ou systemAccess)
       if (nestedField && typeof sectionData[field] === 'object') {
           return {
               ...prev,
@@ -68,6 +72,17 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                       [nestedField]: formattedValue
                   }
               }
+          };
+      }
+      
+      // Caso direto no objeto da section (ex: benefits.receivesTransportVoucher ou systemAccess.allowed)
+      if (typeof sectionData === 'object' && field in sectionData) {
+          return {
+            ...prev,
+            [section]: {
+              ...sectionData,
+              [field]: formattedValue
+            }
           };
       }
 
@@ -81,6 +96,80 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
     });
   };
 
+  // Handler específico para Benefícios
+  const handleBenefitsChange = (field: string, value: any) => {
+      setFormData(prev => ({
+          ...prev,
+          benefits: {
+              ...prev.benefits!,
+              [field]: value
+          }
+      }));
+  };
+
+  // Handler específico para System Access (na raiz)
+  const handleSystemAccessChange = (field: string, value: any) => {
+      setFormData(prev => {
+          let updates: any = { [field]: value };
+          
+          // Auto-fill email logic
+          if (field === 'allowed' && value === true) {
+              if (!prev.systemAccess?.loginEmail && prev.personalInfo?.email) {
+                  updates.loginEmail = prev.personalInfo.email;
+              }
+          }
+
+          return {
+              ...prev,
+              systemAccess: {
+                  ...(prev.systemAccess || { allowed: false, accessLevel: 'basico', loginEmail: '' }),
+                  ...updates
+              }
+          };
+      });
+  };
+
+  // Handlers para Dependentes
+  const handleAddDependent = () => {
+      if (!newDependent.name || !newDependent.birthDate) return;
+      const dep: Dependent = {
+          id: `dep-${Date.now()}`,
+          name: newDependent.name,
+          birthDate: newDependent.birthDate,
+          relation: newDependent.relation as any
+      };
+      setFormData(prev => ({
+          ...prev,
+          dependents: [...(prev.dependents || []), dep]
+      }));
+      setNewDependent({ name: '', relation: 'filho', birthDate: '' });
+      setIsAddingDependent(false);
+  };
+
+  const handleRemoveDependent = (id: string) => {
+      setFormData(prev => ({
+          ...prev,
+          dependents: prev.dependents?.filter(d => d.id !== id) || []
+      }));
+  };
+
+  // Botão Manual "Copiar do Cadastro"
+  const handleCopyPixKey = () => {
+      const type = formData.financialInfo?.bankInfo.pixKeyType;
+      const personal = formData.personalInfo;
+      let keyToCopy = '';
+
+      if (type === 'cpf' && personal?.cpf) keyToCopy = personal.cpf;
+      else if (type === 'telefone' && personal?.phone) keyToCopy = personal.phone;
+      else if (type === 'email' && personal?.email) keyToCopy = personal.email;
+
+      if (keyToCopy) {
+          handleInputChange('financialInfo', 'bankInfo', keyToCopy, 'pixKey');
+      } else {
+          alert('Não foi possível encontrar um dado correspondente no cadastro pessoal.');
+      }
+  };
+
   const handleSave = () => {
     onUpdate(formData);
     setIsEditing(false);
@@ -91,6 +180,7 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
   const handleCancel = () => {
     setFormData(staff);
     setIsEditing(false);
+    setIsAddingDependent(false);
   };
 
   const handleToggleStatus = () => {
@@ -106,20 +196,11 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
       if (!staff.contractInfo?.admissionDate) return null;
       const admission = new Date(staff.contractInfo.admissionDate);
       const today = new Date();
-      
-      // Diferença em meses
       const diffMonths = (today.getFullYear() - admission.getFullYear()) * 12 + (today.getMonth() - admission.getMonth());
-      
-      // Período aquisitivo atual (ciclos de 12 meses)
       const currentCycleMonth = diffMonths % 12;
       const completedCycles = Math.floor(diffMonths / 12);
-      
-      // Se já passou 1 ano (12 meses), começa a contar o período concessivo
-      // Risco aumenta à medida que se aproxima de 23 meses (11 meses após completar 1 ano)
       const monthsSinceVesting = diffMonths - 12;
       const isVested = completedCycles >= 1;
-      
-      // Cálculo de progresso para a próxima férias (0 a 12 meses)
       const progress = (currentCycleMonth / 12) * 100;
       
       let status = 'normal';
@@ -127,18 +208,29 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
       
       if (isVested) {
           if (monthsSinceVesting >= 10) {
-              status = 'critical'; // Perto de dobrar (22+ meses de casa sem férias novas registradas - simplificado)
+              status = 'critical'; 
               message = 'Risco iminente de dobra (multa). Agendar urgente!';
           } else {
               status = 'warning';
               message = 'Direito adquirido. Planeje as férias.';
           }
       }
-
       return { progress, status, message, currentCycleMonth, isVested };
   };
 
   const vacationData = getVacationStatus();
+
+  // Helper Idade
+  const calculateAge = (dateString: string) => {
+      const today = new Date();
+      const birthDate = new Date(dateString);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+      }
+      return age;
+  };
 
   // Componente Auxiliar para Linhas Editáveis
   const EditableRow = ({ 
@@ -206,7 +298,7 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
             </div>
         )}
 
-        {/* Header de Ações Flutuante (Apenas mobile ou se quiser destaque) */}
+        {/* Header de Ações Flutuante */}
         <div className="lg:col-span-2 flex justify-end mb-2">
             {!isEditing ? (
                 <button 
@@ -280,6 +372,103 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                 options={['12x36', '6x1', '5x2', 'outra']}
             />
 
+            {/* --- NOVO: Widget Credenciais de Acesso (Card Style) --- */}
+            <div className={`mt-4 pt-4 border-t border-gray-100 bg-indigo-50/30 -mx-6 px-6 pb-4`}>
+                <h4 className="font-bold text-gray-800 flex items-center gap-2 text-sm mb-3">
+                    <Shield className="w-4 h-4 text-indigo-600" /> Credenciais de Sistema
+                </h4>
+
+                <div className={`p-4 rounded-xl border transition-all ${
+                    formData.systemAccess?.allowed 
+                        ? 'bg-white border-emerald-200 shadow-sm' 
+                        : 'bg-gray-50 border-gray-200 dashed'
+                }`}>
+                    {/* Header do Card */}
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-2">
+                            <div className={`w-2.5 h-2.5 rounded-full ${formData.systemAccess?.allowed ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></div>
+                            <span className={`text-sm font-bold ${formData.systemAccess?.allowed ? 'text-emerald-700' : 'text-gray-500'}`}>
+                                {formData.systemAccess?.allowed ? 'Acesso Ativo' : 'Sem Acesso'}
+                            </span>
+                        </div>
+                        
+                        {/* Toggle Logic via Buttons */}
+                        {isEditing && (
+                            formData.systemAccess?.allowed ? (
+                                <button 
+                                    onClick={() => handleSystemAccessChange('allowed', false)}
+                                    className="text-xs text-red-600 hover:bg-red-50 px-2 py-1.5 rounded border border-red-200 bg-white font-bold flex items-center gap-1 transition-colors shadow-sm"
+                                    title="O funcionário não poderá mais logar, mas o cadastro de RH permanece."
+                                >
+                                    <Lock className="w-3 h-3" /> Revogar Acesso
+                                </button>
+                            ) : (
+                                <button 
+                                    onClick={() => handleSystemAccessChange('allowed', true)}
+                                    className="text-xs text-indigo-600 hover:bg-indigo-50 px-2 py-1.5 rounded border border-indigo-200 bg-white font-bold flex items-center gap-1 transition-colors shadow-sm"
+                                >
+                                    <Key className="w-3 h-3" /> Conceder Acesso
+                                </button>
+                            )
+                        )}
+                    </div>
+
+                    {/* Form Fields */}
+                    {formData.systemAccess?.allowed && (
+                        <div className="space-y-3 animate-in fade-in slide-in-from-top-1">
+                            <div className="grid grid-cols-1 gap-3">
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] uppercase font-bold text-gray-500">E-mail de Login</label>
+                                    {isEditing ? (
+                                        <input 
+                                            className="w-full text-sm p-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                            value={formData.systemAccess.loginEmail}
+                                            onChange={(e) => handleSystemAccessChange('loginEmail', e.target.value)}
+                                            placeholder="email@appcare.com"
+                                        />
+                                    ) : (
+                                        <span className="text-sm font-medium text-gray-900">{formData.systemAccess.loginEmail}</span>
+                                    )}
+                                </div>
+                                
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] uppercase font-bold text-gray-500">Nível de Permissão</label>
+                                    {isEditing ? (
+                                        <select 
+                                            className="w-full text-sm p-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                            value={formData.systemAccess.accessLevel}
+                                            onChange={(e) => handleSystemAccessChange('accessLevel', e.target.value)}
+                                        >
+                                            <option value="admin">Administrador (Total)</option>
+                                            <option value="financeiro">Financeiro</option>
+                                            <option value="enfermagem">Enfermagem</option>
+                                            <option value="basico">Básico / Visualização</option>
+                                        </select>
+                                    ) : (
+                                        <span className="text-xs font-bold text-indigo-800 bg-indigo-50 px-2 py-1 rounded w-fit capitalize border border-indigo-100">
+                                            {formData.systemAccess.accessLevel}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            {isEditing && (
+                                <div className="mt-2 text-[10px] text-gray-400 flex items-start gap-1">
+                                    <AlertCircle className="w-3 h-3 mt-0.5" />
+                                    O usuário deverá utilizar a opção "Esqueci a Senha" caso precise redefinir suas credenciais.
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    
+                    {!formData.systemAccess?.allowed && (
+                        <p className="text-xs text-gray-400 italic">
+                            Este colaborador está registrado apenas para fins de RH e escala. Não possui login no ERP.
+                        </p>
+                    )}
+                </div>
+            </div>
+
             {/* Widget de Férias */}
             {vacationData && (
                 <div className="mt-4 pt-4 border-t border-gray-100">
@@ -307,6 +496,167 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
             )}
         </div>
 
+        {/* --- NOVO BLOCO: Benefícios e Transporte --- */}
+        <div className={`lg:col-span-1 bg-white border rounded-xl p-6 shadow-sm transition-all ${isEditing ? 'border-orange-300 ring-4 ring-orange-50/50' : 'border-gray-100'}`}>
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-100 pb-2">
+                <Bus className="w-5 h-5 text-orange-500" /> Benefícios e Transporte
+            </h3>
+            
+            {/* VT Toggle */}
+            <div className="flex justify-between items-center py-2">
+                <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                    <Bus className="w-4 h-4 text-gray-400" /> Recebe Vale Transporte?
+                </span>
+                {isEditing ? (
+                    <input 
+                        type="checkbox" 
+                        className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"
+                        checked={formData.benefits?.receivesTransportVoucher || false}
+                        onChange={(e) => handleBenefitsChange('receivesTransportVoucher', e.target.checked)}
+                    />
+                ) : (
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${formData.benefits?.receivesTransportVoucher ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {formData.benefits?.receivesTransportVoucher ? 'SIM' : 'NÃO'}
+                    </span>
+                )}
+            </div>
+
+            {/* VT Fields Conditional */}
+            {formData.benefits?.receivesTransportVoucher && (
+                <div className="bg-orange-50/50 p-3 rounded-lg mt-2 mb-2 grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1">
+                    <div>
+                        <label className="text-xs font-bold text-orange-800 uppercase block mb-1">Qtd. Diária</label>
+                        {isEditing ? (
+                            <input 
+                                type="number" 
+                                className="w-full border border-orange-200 rounded px-2 py-1 text-sm bg-white"
+                                value={formData.benefits.transportVoucherDailyQty || 2}
+                                onChange={(e) => handleBenefitsChange('transportVoucherDailyQty', parseFloat(e.target.value))}
+                            />
+                        ) : (
+                            <span className="text-sm font-bold text-gray-700">{formData.benefits.transportVoucherDailyQty || '-'} passagens</span>
+                        )}
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-orange-800 uppercase block mb-1">Valor Unit.</label>
+                        {isEditing ? (
+                            <input 
+                                type="number" 
+                                className="w-full border border-orange-200 rounded px-2 py-1 text-sm bg-white"
+                                step="0.05"
+                                value={formData.benefits.transportVoucherUnitValue || 0}
+                                onChange={(e) => handleBenefitsChange('transportVoucherUnitValue', parseFloat(e.target.value))}
+                            />
+                        ) : (
+                            <span className="text-sm font-bold text-gray-700">R$ {formData.benefits.transportVoucherUnitValue?.toFixed(2) || '-'}</span>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* VR Toggle */}
+            <div className="flex justify-between items-center py-2 border-t border-gray-100 mt-2">
+                <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                    <Utensils className="w-4 h-4 text-gray-400" /> Recebe Vale Refeição?
+                </span>
+                {isEditing ? (
+                    <input 
+                        type="checkbox" 
+                        className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"
+                        checked={formData.benefits?.receivesMealVoucher || false}
+                        onChange={(e) => handleBenefitsChange('receivesMealVoucher', e.target.checked)}
+                    />
+                ) : (
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${formData.benefits?.receivesMealVoucher ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {formData.benefits?.receivesMealVoucher ? 'SIM' : 'NÃO'}
+                    </span>
+                )}
+            </div>
+        </div>
+
+        {/* --- NOVO BLOCO: Dependentes --- */}
+        <div className={`lg:col-span-1 bg-white border rounded-xl p-6 shadow-sm transition-all ${isEditing ? 'border-pink-300 ring-4 ring-pink-50/50' : 'border-gray-100'}`}>
+            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
+                <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                    <Baby className="w-5 h-5 text-pink-500" /> Dependentes
+                </h3>
+                {isEditing && (
+                    <button 
+                        onClick={() => setIsAddingDependent(!isAddingDependent)}
+                        className="text-xs bg-pink-50 text-pink-600 px-2 py-1 rounded font-bold hover:bg-pink-100 flex items-center gap-1"
+                    >
+                        <Plus className="w-3 h-3"/> Adicionar
+                    </button>
+                )}
+            </div>
+
+            {/* Form de Adição */}
+            {isAddingDependent && isEditing && (
+                <div className="bg-gray-50 p-3 rounded-lg mb-3 border border-gray-200 animate-in fade-in">
+                    <input 
+                        className="w-full mb-2 p-1.5 text-sm border rounded" 
+                        placeholder="Nome do Dependente"
+                        value={newDependent.name}
+                        onChange={e => setNewDependent({...newDependent, name: e.target.value})}
+                    />
+                    <div className="flex gap-2 mb-2">
+                        <select 
+                            className="w-1/2 p-1.5 text-sm border rounded bg-white"
+                            value={newDependent.relation}
+                            onChange={e => setNewDependent({...newDependent, relation: e.target.value as any})}
+                        >
+                            <option value="filho">Filho(a)</option>
+                            <option value="conjuge">Cônjuge</option>
+                            <option value="outro">Outro</option>
+                        </select>
+                        <input 
+                            type="date"
+                            className="w-1/2 p-1.5 text-sm border rounded"
+                            value={newDependent.birthDate}
+                            onChange={e => setNewDependent({...newDependent, birthDate: e.target.value})}
+                        />
+                    </div>
+                    <button 
+                        onClick={handleAddDependent}
+                        className="w-full bg-pink-600 text-white text-xs font-bold py-1.5 rounded hover:bg-pink-700"
+                    >
+                        Salvar Dependente
+                    </button>
+                </div>
+            )}
+
+            {/* Lista de Dependentes */}
+            <div className="space-y-3">
+                {formData.dependents && formData.dependents.length > 0 ? formData.dependents.map(dep => {
+                    const age = calculateAge(dep.birthDate);
+                    const isSalarioFamilia = dep.relation === 'filho' && age < 14;
+                    
+                    return (
+                        <div key={dep.id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg border border-gray-100">
+                            <div>
+                                <p className="text-sm font-bold text-gray-800">{dep.name}</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-xs text-gray-500 capitalize">{dep.relation} • {age} anos</span>
+                                    {isSalarioFamilia && (
+                                        <span className="text-[10px] bg-green-100 text-green-700 px-1.5 rounded font-bold" title="Elegível para Salário Família">
+                                            $ Família
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            {isEditing && (
+                                <button onClick={() => handleRemoveDependent(dep.id)} className="text-red-400 hover:text-red-600 p-1">
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                    );
+                }) : (
+                    <p className="text-sm text-gray-400 italic">Nenhum dependente cadastrado.</p>
+                )}
+            </div>
+        </div>
+
         {/* Seção Bancária (Full Width no Grid, mas internamente dividido) */}
         {formData.financialInfo && (
             <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-3">
@@ -327,14 +677,37 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                             type="select"
                             options={['cpf', 'telefone', 'email', 'aleatoria', 'outra']}
                         />
-                        <EditableRow 
-                            icon={Check} 
-                            label="Chave Pix" 
-                            value={formData.financialInfo.bankInfo.pixKey} 
-                            section="financialInfo" 
-                            field="bankInfo" 
-                            nestedField="pixKey"
-                        />
+                        
+                        {/* Linha Customizada para Chave Pix com Botão de Copiar */}
+                        <div className="flex items-center justify-between py-3 border-b border-emerald-100 last:border-0 min-h-[48px]">
+                            <span className="text-gray-500 text-sm flex items-center gap-2 w-1/3">
+                                <Check className="w-4 h-4 text-gray-400 flex-shrink-0"/> Chave Pix
+                            </span>
+                            <div className="w-2/3 flex items-center gap-2 justify-end">
+                                {isEditing ? (
+                                    <>
+                                        <input
+                                            className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none text-right"
+                                            value={formData.financialInfo?.bankInfo?.pixKey || ''}
+                                            onChange={(e) => handleInputChange('financialInfo', 'bankInfo', e.target.value, 'pixKey')}
+                                        />
+                                        <button
+                                            onClick={handleCopyPixKey}
+                                            type="button"
+                                            title="Copiar do Cadastro"
+                                            className="p-2 bg-emerald-200 text-emerald-800 rounded-lg hover:bg-emerald-300 transition-colors shadow-sm"
+                                        >
+                                            <Copy className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                ) : (
+                                    <span className="font-semibold text-gray-900 text-sm break-all flex-1 text-right">
+                                        {formData.financialInfo?.bankInfo?.pixKey || '-'}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 

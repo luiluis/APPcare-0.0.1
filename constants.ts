@@ -159,6 +159,11 @@ export const MOCK_STAFF: Staff[] = [
       scale: '12x36',
       workShift: 'diurno'
     },
+    systemAccess: {
+        allowed: true,
+        accessLevel: 'admin',
+        loginEmail: 'ana.souza@appcare.com'
+    },
     financialInfo: {
       baseSalary: 4500.00,
       insalubridadeLevel: 20,
@@ -170,6 +175,16 @@ export const MOCK_STAFF: Staff[] = [
         pixKey: '123.456.789-00'
       }
     },
+    benefits: {
+        receivesTransportVoucher: true,
+        transportVoucherDailyQty: 2,
+        transportVoucherUnitValue: 5.50,
+        receivesMealVoucher: true
+    },
+    dependents: [
+        { id: 'dep-1', name: 'Lucas Souza', birthDate: '2015-05-20', relation: 'filho' },
+        { id: 'dep-2', name: 'Julia Souza', birthDate: '2018-10-10', relation: 'filho' }
+    ],
     professionalInfo: {
       corenNumber: '123456-SP',
       corenState: 'SP'
@@ -199,9 +214,14 @@ export const MOCK_STAFF: Staff[] = [
       scale: '12x36',
       workShift: 'noturno'
     },
+    systemAccess: {
+        allowed: false,
+        accessLevel: 'basico',
+        loginEmail: ''
+    },
     financialInfo: {
       baseSalary: 1800.00,
-      insalubridadeLevel: 40, // Adicional noturno muitas vezes implica insalubridade máxima dependendo da função
+      insalubridadeLevel: 40, 
       bankInfo: {
         banco: 'Banco do Brasil (001)',
         agencia: '4321',
@@ -209,6 +229,12 @@ export const MOCK_STAFF: Staff[] = [
         pixKeyType: 'aleatoria',
         pixKey: '7f93b2a1-c840-4b2e-9d8a-1234567890ab'
       }
+    },
+    benefits: {
+        receivesTransportVoucher: true,
+        transportVoucherDailyQty: 2,
+        transportVoucherUnitValue: 6.00, // Tarifa noturna/integração
+        receivesMealVoucher: false // Traz marmita ou come na casa (noturno)
     },
     professionalInfo: {
       corenState: 'SP'
@@ -247,6 +273,10 @@ export const MOCK_STAFF: Staff[] = [
         pixKeyType: 'email',
         pixKey: 'marta.cozinha@appcare.com'
       }
+    },
+    benefits: {
+        receivesTransportVoucher: false, // Mora perto
+        receivesMealVoucher: true
     }
   }
 ];

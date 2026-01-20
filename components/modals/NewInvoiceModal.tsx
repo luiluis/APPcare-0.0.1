@@ -62,6 +62,10 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
   const residentsFiltered = residents.filter(r => r.branchId === formData.branchId);
   const isIncome = type === 'income';
 
+  // Estilo base unificado para inputs
+  const inputBaseClass = "w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 placeholder-gray-400 font-medium transition-all";
+  const selectBaseClass = "w-full border border-gray-300 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 text-sm font-medium";
+
   const handleSubmit = () => {
     if (!formData.amount || !formData.date) {
       setError("Preencha valor e data.");
@@ -154,7 +158,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                 <div className="relative">
                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <select 
-                    className="w-full border border-gray-300 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-900 text-sm"
+                    className={selectBaseClass}
                     value={formData.branchId}
                     onChange={e => setFormData({...formData, branchId: e.target.value, residentId: ''})}
                 >
@@ -174,7 +178,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                         <div className="relative">
                             <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <select 
-                                className="w-full border border-blue-200 bg-blue-50/30 rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 font-medium"
+                                className="w-full border border-blue-200 bg-white rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 font-medium"
                                 value={formData.residentId}
                                 onChange={e => setFormData({...formData, residentId: e.target.value})}
                             >
@@ -207,7 +211,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Descrição</label>
                                 <input 
                                     type="text" 
-                                    className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 text-gray-500"
+                                    className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 text-gray-900"
                                     placeholder="Mensalidade (Automático)"
                                     value={formData.description}
                                     onChange={e => setFormData({...formData, description: e.target.value})}
@@ -219,7 +223,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Item / Produto</label>
                                     <input 
                                         type="text" 
-                                        className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className={inputBaseClass}
                                         placeholder="Ex: Fralda G, Terapia..."
                                         value={formData.description}
                                         onChange={e => setFormData({...formData, description: e.target.value})}
@@ -229,7 +233,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                                 <div className="col-span-2">
                                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Categoria</label>
                                     <select 
-                                        className="w-full border border-gray-300 rounded-xl px-3 py-2.5 outline-none capitalize"
+                                        className="w-full border border-gray-300 rounded-xl px-3 py-2.5 outline-none capitalize bg-white text-gray-900 font-medium"
                                         value={formData.category}
                                         onChange={e => setFormData({...formData, category: e.target.value as InvoiceCategory})}
                                     >
@@ -245,7 +249,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Valor (R$)</label>
                             <input 
                                 type="number" 
-                                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-gray-900"
+                                className={inputBaseClass}
                                 placeholder="0,00"
                                 value={formData.amount}
                                 onChange={e => setFormData({...formData, amount: e.target.value})}
@@ -259,7 +263,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input 
                                     type="date" 
-                                    className="w-full border border-gray-300 rounded-xl pl-10 pr-2 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                    className="w-full border border-gray-300 rounded-xl pl-10 pr-2 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white text-gray-900 font-medium"
                                     value={formData.date}
                                     onChange={e => setFormData({...formData, date: e.target.value})}
                                 />
@@ -273,7 +277,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                             <input 
                                 type="checkbox" 
                                 id="rec" 
-                                className="w-4 h-4 text-blue-600 rounded"
+                                className="w-4 h-4 text-blue-600 rounded bg-white"
                                 checked={formData.isRecurring}
                                 onChange={e => setFormData({...formData, isRecurring: e.target.checked})}
                             />
@@ -295,7 +299,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                             <Truck className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input 
                                 type="text" 
-                                className="w-full border border-rose-200 bg-rose-50/30 rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-rose-500 outline-none text-gray-900 font-medium placeholder-gray-400"
+                                className="w-full border border-rose-200 bg-white rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-rose-500 outline-none text-gray-900 font-medium placeholder-gray-400"
                                 placeholder="Ex: Enel, Sabesp, João Manutenção..."
                                 value={formData.supplier}
                                 onChange={e => setFormData({...formData, supplier: e.target.value})}
@@ -309,7 +313,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Descrição da Despesa</label>
                             <input 
                                 type="text" 
-                                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-rose-500 outline-none"
+                                className={inputBaseClass}
                                 placeholder="Ex: Conta de Luz Outubro"
                                 value={formData.description}
                                 onChange={e => setFormData({...formData, description: e.target.value})}
@@ -319,7 +323,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Categoria</label>
                             <select 
-                                className="w-full border border-gray-300 rounded-xl px-3 py-2.5 outline-none capitalize"
+                                className="w-full border border-gray-300 rounded-xl px-3 py-2.5 outline-none capitalize bg-white text-gray-900 font-medium"
                                 value={formData.category}
                                 onChange={e => setFormData({...formData, category: e.target.value as InvoiceCategory})}
                             >
@@ -332,7 +336,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Valor (R$)</label>
                             <input 
                                 type="number" 
-                                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-rose-500 outline-none font-semibold text-gray-900"
+                                className={inputBaseClass}
                                 placeholder="0,00"
                                 value={formData.amount}
                                 onChange={e => setFormData({...formData, amount: e.target.value})}
@@ -348,7 +352,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input 
                                     type="date" 
-                                    className="w-full border border-gray-300 rounded-xl pl-10 pr-2 py-2.5 focus:ring-2 focus:ring-rose-500 outline-none text-sm"
+                                    className="w-full border border-gray-300 rounded-xl pl-10 pr-2 py-2.5 focus:ring-2 focus:ring-rose-500 outline-none text-sm bg-white text-gray-900 font-medium"
                                     value={formData.date}
                                     onChange={e => setFormData({...formData, date: e.target.value})}
                                 />
@@ -358,7 +362,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                              <input 
                                 type="checkbox" 
                                 id="rec-exp" 
-                                className="w-4 h-4 text-rose-600 rounded"
+                                className="w-4 h-4 text-rose-600 rounded bg-white"
                                 checked={formData.isRecurring}
                                 onChange={e => setFormData({...formData, isRecurring: e.target.checked})}
                              />
@@ -371,7 +375,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
             {/* --- UPLOAD DE ANEXO (Comum) --- */}
             <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Comprovante / Nota Fiscal</label>
-                <div className="border border-dashed border-gray-300 rounded-xl p-3 text-center hover:bg-gray-50 transition-colors cursor-pointer relative flex items-center justify-center gap-3">
+                <div className="border border-dashed border-gray-300 rounded-xl p-3 text-center hover:bg-gray-50 transition-colors cursor-pointer relative flex items-center justify-center gap-3 bg-white">
                     <input 
                         type="file" 
                         id="file-upload" 
