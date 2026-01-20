@@ -1,10 +1,19 @@
 
 import React, { useState, useMemo } from 'react';
 import { Staff, StaffDocument, StaffDocumentCategory } from '../../types';
-import { FileText, Eye, Trash2, Plus, UploadCloud, X, Loader2, Calendar, FolderTree } from 'lucide-react';
+import { FileText, Eye, Trash2, Plus, UploadCloud, X, Loader2, Calendar, FolderTree, CheckCircle2, AlertCircle, ArrowUpRight, Trophy } from 'lucide-react';
 import { dataService } from '../../services/dataService';
 import { generateStoragePath } from '../../lib/utils';
 import { BRANCHES } from '../../constants';
+
+// Configuração do Checklist de Admissão
+const REQUIRED_DOCS = [
+  { id: 'contract', label: 'Contrato de Trabalho', required: true },
+  { id: 'identity', label: 'Documento Pessoal (RG/CPF)', required: true },
+  { id: 'aso', label: 'ASO Admissional/Periódico', required: true },
+  { id: 'address', label: 'Comprovante de Residência', required: true },
+  { id: 'certification', label: 'Certificado/Coren', required: false } // Opcional
+];
 
 interface StaffDocumentsTabProps {
   staff: Staff;
@@ -39,6 +48,35 @@ export const StaffDocumentsTab: React.FC<StaffDocumentsTabProps> = ({ staff, doc
     
     return generateStoragePath(branchName, staff.role, staff.name, folderName);
   }, [staff, category]);
+
+  // Helper para verificar status do documento no checklist
+  const checkDocStatus = (reqId: string) => {
+      // Regra especial para 'address' (Comprovante de Residência não é uma categoria nativa)
+      if (reqId === 'address') {
+          return documents.find(d => 
+              d.title.toLowerCase().includes('residência') || 
+              d.title.toLowerCase().includes('residencia') || 
+              d.title.toLowerCase().includes('endereço') ||
+              d.title.toLowerCase().includes('endereco')
+          );
+      }
+      // Regra padrão: busca por categoria igual ao ID
+      return documents.find(d => d.category === reqId);
+  };
+
+  const handleOpenUploadFor = (reqDoc: typeof REQUIRED_DOCS[0]) => {
+      if (reqDoc.id === 'address') {
+          setCategory('other');
+          setTitle('Comprovante de Residência');
+      } else {
+          // Os IDs definidos em REQUIRED_DOCS mapeiam para categorias válidas (exceto address)
+          setCategory(reqDoc.id as StaffDocumentCategory);
+          setTitle(reqDoc.label);
+      }
+      setExpirationDate('');
+      setSelectedFile(null);
+      setIsUploadOpen(true);
+  };
 
   const handleUpload = async () => {
     if (!selectedFile || !title) return;
@@ -94,18 +132,123 @@ export const StaffDocumentsTab: React.FC<StaffDocumentsTabProps> = ({ staff, doc
       return new Date(dateStr) < new Date();
   };
 
+  // --- LÓGICA DE PROGRESSO ---
+  const progressStats = useMemo(() => {
+      const totalRequired = REQUIRED_DOCS.filter(d => d.required).length;
+      const uploadedRequired = REQUIRED_DOCS.filter(req => req.required && checkDocStatus(req.id)).length;
+      const percentage = totalRequired > 0 ? Math.round((uploadedRequired / totalRequired) * 100) : 0;
+      
+      let color = 'bg-red-500';
+      let textColor = 'text-red-600';
+      if (percentage >= 100) {
+          color = 'bg-emerald-500';
+          textColor = 'text-emerald-600';
+      } else if (percentage >= 50) {
+          color = 'bg-amber-500';
+          textColor = 'text-amber-600';
+      }
+
+      return { percentage, color, textColor, uploadedRequired, totalRequired };
+  }, [documents]);
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
        
+       {/* --- BARRA DE PROGRESSO (NOVO) --- */}
+       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+           <div className="flex justify-between items-end mb-2">
+               <div>
+                   <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
+                       <Trophy className={`w-4 h-4 ${progressStats.textColor}`} /> Progresso da Admissão
+                   </h3>
+                   <p className="text-xs text-gray-500 mt-0.5">
+                       {progressStats.percentage === 100 
+                           ? 'Documentação completa.' 
+                           : `${progressStats.uploadedRequired} de ${progressStats.totalRequired} documentos obrigatórios enviados.`}
+                   </p>
+               </div>
+               <span className={`text-2xl font-bold ${progressStats.textColor}`}>
+                   {progressStats.percentage}%
+               </span>
+           </div>
+           
+           <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden">
+               <div 
+                   className={`h-full rounded-full transition-all duration-700 ease-out ${progressStats.color}`}
+                   style={{ width: `${progressStats.percentage}%` }}
+               ></div>
+           </div>
+       </div>
+
+       {/* --- CHECKLIST DE ADMISSÃO --- */}
+       <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+           <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
+               Status da Documentação (Admissional)
+           </h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+               {REQUIRED_DOCS.map(req => {
+                   const existingDoc = checkDocStatus(req.id);
+                   const isDelivered = !!existingDoc;
+                   
+                   if (isDelivered) {
+                       return (
+                           <div key={req.id} className="bg-white border border-emerald-200 rounded-lg p-3 shadow-sm flex flex-col justify-between h-full">
+                               <div>
+                                   <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs uppercase mb-1">
+                                       <CheckCircle2 className="w-4 h-4" /> Entregue
+                                   </div>
+                                   <p className="text-xs font-semibold text-gray-700 leading-tight">{req.label}</p>
+                               </div>
+                               <a 
+                                 href={existingDoc.url} 
+                                 target="_blank" 
+                                 rel="noreferrer"
+                                 className="mt-3 text-[10px] flex items-center justify-center gap-1 w-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 py-1.5 rounded font-bold transition-colors"
+                               >
+                                   Ver Arquivo <ArrowUpRight className="w-3 h-3" />
+                               </a>
+                           </div>
+                       );
+                   } else {
+                       return (
+                           <div key={req.id} className={`bg-white border rounded-lg p-3 shadow-sm flex flex-col justify-between h-full ${req.required ? 'border-red-200' : 'border-gray-200'}`}>
+                               <div>
+                                   <div className={`flex items-center gap-2 font-bold text-xs uppercase mb-1 ${req.required ? 'text-red-600' : 'text-gray-400'}`}>
+                                       <AlertCircle className="w-4 h-4" /> {req.required ? 'Pendente' : 'Opcional'}
+                                   </div>
+                                   <p className="text-xs font-semibold text-gray-700 leading-tight">{req.label}</p>
+                               </div>
+                               <button 
+                                 onClick={() => handleOpenUploadFor(req)}
+                                 className={`mt-3 text-[10px] flex items-center justify-center gap-1 w-full py-1.5 rounded font-bold transition-colors shadow-sm
+                                    ${req.required ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}
+                                 `}
+                               >
+                                   <UploadCloud className="w-3 h-3" /> Enviar Agora
+                               </button>
+                           </div>
+                       );
+                   }
+               })}
+           </div>
+       </div>
+
+       {/* --- LISTA GERAL --- */}
        <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
            <h3 className="font-bold text-gray-800 flex items-center gap-2">
-               <FileText className="w-5 h-5 text-blue-600" /> Documentação Digital
+               <FileText className="w-5 h-5 text-blue-600" /> Todos os Arquivos
            </h3>
            <button 
-             onClick={() => setIsUploadOpen(true)}
-             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
+             onClick={() => {
+                 setTitle('');
+                 setCategory('other');
+                 setExpirationDate('');
+                 setSelectedFile(null);
+                 setIsUploadOpen(true);
+             }}
+             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors text-sm"
            >
-               <Plus className="w-4 h-4" /> Novo Arquivo
+               <Plus className="w-4 h-4" /> Upload Avulso
            </button>
        </div>
 
