@@ -241,6 +241,7 @@ export interface StaffSystemAccess {
   allowed: boolean;
   accessLevel: 'admin' | 'financeiro' | 'enfermagem' | 'basico';
   loginEmail: string;
+  lastLogin?: string | null; // Data ISO do último acesso ou null se nunca acessou
 }
 
 export interface Staff {

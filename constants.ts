@@ -162,7 +162,8 @@ export const MOCK_STAFF: Staff[] = [
     systemAccess: {
         allowed: true,
         accessLevel: 'admin',
-        loginEmail: 'ana.souza@appcare.com'
+        loginEmail: 'ana.souza@appcare.com',
+        lastLogin: '2023-10-25T08:30:00.000Z' // STATUS: ATIVO
     },
     financialInfo: {
       baseSalary: 4500.00,
@@ -218,6 +219,7 @@ export const MOCK_STAFF: Staff[] = [
         allowed: false,
         accessLevel: 'basico',
         loginEmail: ''
+        // lastLogin undefined = nunca acessou (mas está bloqueado, então STATUS: INATIVO)
     },
     financialInfo: {
       baseSalary: 1800.00,
@@ -262,6 +264,12 @@ export const MOCK_STAFF: Staff[] = [
       department: 'cozinha',
       scale: '6x1',
       workShift: 'diurno'
+    },
+    systemAccess: {
+        allowed: true,
+        accessLevel: 'basico',
+        loginEmail: 'marta.cozinha@appcare.com',
+        lastLogin: null // STATUS: PENDENTE (Convite enviado, nunca logou)
     },
     financialInfo: {
       baseSalary: 2200.00,

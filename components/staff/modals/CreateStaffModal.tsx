@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { X, UserPlus, Building2, Briefcase, CreditCard, User, Loader2, Shield, Mail, AlertCircle, Lock } from 'lucide-react';
 import { BRANCHES } from '../../../constants';
 import { Staff } from '../../../types';
-import { formatCPF } from '../../../lib/utils';
+import { formatCPF, stripSpecialChars } from '../../../lib/utils';
 
 interface CreateStaffModalProps {
   isOpen: boolean;
@@ -59,7 +59,7 @@ export const CreateStaffModal: React.FC<CreateStaffModalProps> = ({ isOpen, onCl
         },
         // Inicializa objetos obrigatórios para não quebrar a visualização
         personalInfo: {
-            cpf: formData.cpf,
+            cpf: stripSpecialChars(formData.cpf), // Limpeza de máscara
             rg: '',
             birthDate: '',
             phone: '',

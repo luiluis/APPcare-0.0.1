@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Staff, Dependent } from '../../types';
-import { User, Phone, MapPin, Calendar, Briefcase, CreditCard, Building, Edit2, Check, AlertOctagon, Power, RefreshCw, Palmtree, CheckCircle2, Zap, Landmark, Copy, Bus, Utensils, Baby, Trash2, Plus, Shield, Lock, Key, AlertCircle, X } from 'lucide-react';
+import { User, Phone, MapPin, Calendar, Briefcase, CreditCard, Building, Edit2, Check, AlertOctagon, Power, RefreshCw, Palmtree, CheckCircle2, Zap, Landmark, Copy, Bus, Utensils, Baby, Trash2, Plus, Shield, Lock, Key, AlertCircle, X, AlertTriangle, Calculator, Clock, Send, CheckCircle } from 'lucide-react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
-import { formatCPF, formatPhone } from '../../lib/utils';
+import { formatCPF, formatPhone, stripSpecialChars, formatDateTime } from '../../lib/utils';
 
 interface StaffInfoTabProps {
   staff: Staff;
@@ -129,6 +129,11 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
       });
   };
 
+  // Resend Invite Handler
+  const handleResendInvite = () => {
+      alert(`Convite reenviado para ${formData.systemAccess?.loginEmail}!`);
+  };
+
   // Handlers para Dependentes
   const handleAddDependent = () => {
       if (!newDependent.name || !newDependent.birthDate) return;
@@ -171,7 +176,41 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
   };
 
   const handleSave = () => {
-    onUpdate(formData);
+    // Cria uma cópia limpa dos dados antes de salvar
+    const cleanedData = { ...formData };
+
+    // Limpeza de campos pessoais
+    if (cleanedData.personalInfo) {
+        cleanedData.personalInfo = {
+            ...cleanedData.personalInfo,
+            cpf: stripSpecialChars(cleanedData.personalInfo.cpf),
+            rg: stripSpecialChars(cleanedData.personalInfo.rg),
+            phone: stripSpecialChars(cleanedData.personalInfo.phone)
+        };
+    }
+
+    // Limpeza condicional da Chave Pix
+    if (cleanedData.financialInfo?.bankInfo?.pixKey) {
+        const type = cleanedData.financialInfo.bankInfo.pixKeyType?.toLowerCase();
+        if (type === 'cpf' || type === 'telefone') {
+            cleanedData.financialInfo.bankInfo = {
+                ...cleanedData.financialInfo.bankInfo,
+                pixKey: stripSpecialChars(cleanedData.financialInfo.bankInfo.pixKey)
+            };
+        }
+    }
+
+    // --- REGRA DE BLOQUEIO FINANCEIRO ---
+    const bankInfo = cleanedData.financialInfo?.bankInfo;
+    const hasPix = !!bankInfo?.pixKey;
+    const hasBankAccount = !!(bankInfo?.banco && bankInfo?.agencia && bankInfo?.conta);
+
+    if (!hasPix && !hasBankAccount) {
+        alert('Erro: É obrigatório cadastrar ao menos uma forma de pagamento (Pix ou Conta Bancária Completa).');
+        return;
+    }
+
+    onUpdate(cleanedData);
     setIsEditing(false);
     setShowSuccessToast(true);
     setTimeout(() => setShowSuccessToast(false), 3000);
@@ -191,7 +230,19 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
       setTimeout(() => setShowSuccessToast(false), 3000);
   };
 
-  // Cálculo de Férias
+  // Helper Idade
+  const calculateAge = (dateString: string) => {
+      const today = new Date();
+      const birthDate = new Date(dateString);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+      }
+      return age;
+  };
+
+  // Cálculo de Férias e Salário Família
   const getVacationStatus = () => {
       if (!staff.contractInfo?.admissionDate) return null;
       const admission = new Date(staff.contractInfo.admissionDate);
@@ -220,17 +271,37 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
 
   const vacationData = getVacationStatus();
 
-  // Helper Idade
-  const calculateAge = (dateString: string) => {
-      const today = new Date();
-      const birthDate = new Date(dateString);
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const m = today.getMonth() - birthDate.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-          age--;
+  // Contagem de Cotas Salário Família (Filhos < 14 anos)
+  const salarioFamiliaCount = (formData.dependents || []).reduce((acc, dep) => {
+      const age = calculateAge(dep.birthDate);
+      if (dep.relation === 'filho' && age < 14) return acc + 1;
+      return acc;
+  }, 0);
+
+  // Helper para verificar divergência de CPF no Pix
+  const checkPixMismatch = () => {
+      const bankInfo = formData.financialInfo?.bankInfo;
+      const personalInfo = formData.personalInfo;
+      
+      if (bankInfo?.pixKeyType === 'cpf' && bankInfo.pixKey && personalInfo?.cpf) {
+          const cleanPix = stripSpecialChars(bankInfo.pixKey);
+          const cleanCpf = stripSpecialChars(personalInfo.cpf);
+          // Verifica se são diferentes E se a chave pix não está vazia
+          return cleanPix !== cleanCpf && cleanPix.length > 0;
       }
-      return age;
+      return false;
   };
+
+  const isPixMismatch = checkPixMismatch();
+
+  // Helper de Status de Acesso
+  const getAccessStatus = () => {
+      if (!formData.systemAccess?.allowed) return 'inactive';
+      if (formData.systemAccess.lastLogin) return 'active';
+      return 'pending';
+  };
+
+  const accessStatus = getAccessStatus();
 
   // Componente Auxiliar para Linhas Editáveis
   const EditableRow = ({ 
@@ -379,17 +450,32 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                 </h4>
 
                 <div className={`p-4 rounded-xl border transition-all ${
-                    formData.systemAccess?.allowed 
+                    accessStatus !== 'inactive' 
                         ? 'bg-white border-emerald-200 shadow-sm' 
                         : 'bg-gray-50 border-gray-200 dashed'
                 }`}>
                     {/* Header do Card */}
                     <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-2">
-                            <div className={`w-2.5 h-2.5 rounded-full ${formData.systemAccess?.allowed ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></div>
-                            <span className={`text-sm font-bold ${formData.systemAccess?.allowed ? 'text-emerald-700' : 'text-gray-500'}`}>
-                                {formData.systemAccess?.allowed ? 'Acesso Ativo' : 'Sem Acesso'}
-                            </span>
+                            {/* Visual Logic: Active (Green), Pending (Yellow), Inactive (Gray) */}
+                            {accessStatus === 'active' && (
+                                <>
+                                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    <span className="text-sm font-bold text-emerald-700">Acesso Ativo</span>
+                                </>
+                            )}
+                            {accessStatus === 'pending' && (
+                                <>
+                                    <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                                    <span className="text-sm font-bold text-amber-700">Pendente (Convite Enviado)</span>
+                                </>
+                            )}
+                            {accessStatus === 'inactive' && (
+                                <>
+                                    <div className="w-2.5 h-2.5 rounded-full bg-gray-400"></div>
+                                    <span className="text-sm font-bold text-gray-500">Sem Acesso</span>
+                                </>
+                            )}
                         </div>
                         
                         {/* Toggle Logic via Buttons */}
@@ -418,7 +504,19 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                         <div className="space-y-3 animate-in fade-in slide-in-from-top-1">
                             <div className="grid grid-cols-1 gap-3">
                                 <div className="flex flex-col gap-1">
-                                    <label className="text-[10px] uppercase font-bold text-gray-500">E-mail de Login</label>
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-[10px] uppercase font-bold text-gray-500">E-mail de Login</label>
+                                        {/* Botão de Reenviar Convite se Pendente */}
+                                        {accessStatus === 'pending' && !isEditing && (
+                                            <button 
+                                                onClick={handleResendInvite}
+                                                className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200 hover:bg-amber-100 flex items-center gap-1 font-bold"
+                                            >
+                                                <Send className="w-3 h-3" /> Reenviar Convite
+                                            </button>
+                                        )}
+                                    </div>
+                                    
                                     {isEditing ? (
                                         <input 
                                             className="w-full text-sm p-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -450,6 +548,14 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                                         </span>
                                     )}
                                 </div>
+
+                                {/* Last Login Info */}
+                                {accessStatus === 'active' && !isEditing && (
+                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-400 mt-1">
+                                        <CheckCircle className="w-3 h-3 text-emerald-500" />
+                                        Último acesso: {formData.systemAccess.lastLogin ? formatDateTime(formData.systemAccess.lastLogin) : '-'}
+                                    </div>
+                                )}
                             </div>
                             
                             {isEditing && (
@@ -629,19 +735,22 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
             <div className="space-y-3">
                 {formData.dependents && formData.dependents.length > 0 ? formData.dependents.map(dep => {
                     const age = calculateAge(dep.birthDate);
+                    // Regra visual de Salário Família (Filho < 14 anos)
                     const isSalarioFamilia = dep.relation === 'filho' && age < 14;
                     
                     return (
                         <div key={dep.id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg border border-gray-100">
                             <div>
-                                <p className="text-sm font-bold text-gray-800">{dep.name}</p>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-xs text-gray-500 capitalize">{dep.relation} • {age} anos</span>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-sm font-bold text-gray-800">{dep.name}</p>
                                     {isSalarioFamilia && (
-                                        <span className="text-[10px] bg-green-100 text-green-700 px-1.5 rounded font-bold" title="Elegível para Salário Família">
+                                        <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold border border-green-200" title="Elegível para Salário Família">
                                             $ Família
                                         </span>
                                     )}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-xs text-gray-500 capitalize">{dep.relation} • {age} anos</span>
                                 </div>
                             </div>
                             {isEditing && (
@@ -653,6 +762,17 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                     );
                 }) : (
                     <p className="text-sm text-gray-400 italic">Nenhum dependente cadastrado.</p>
+                )}
+
+                {/* Resumo de Cotas */}
+                {formData.dependents && formData.dependents.length > 0 && (
+                    <div className="mt-3 pt-2 border-t border-gray-100 flex justify-between items-center">
+                        <span className="text-xs text-gray-500 font-medium">Cotas Salário Família:</span>
+                        <span className="text-xs font-bold text-green-700 bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center gap-1">
+                            <Calculator className="w-3 h-3" />
+                            {salarioFamiliaCount} {salarioFamiliaCount === 1 ? 'cota' : 'cotas'}
+                        </span>
+                    </div>
                 )}
             </div>
         </div>
@@ -707,6 +827,14 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                                 )}
                             </div>
                         </div>
+                        
+                        {/* Alerta de Divergência de Titularidade */}
+                        {isPixMismatch && isEditing && (
+                            <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 flex items-start gap-1.5 leading-tight animate-in fade-in">
+                                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                <span><strong>Atenção:</strong> Esta chave Pix não pertence ao CPF do titular do cadastro.</span>
+                            </div>
+                        )}
 
                     </div>
                 </div>

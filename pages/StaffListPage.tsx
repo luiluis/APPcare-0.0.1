@@ -5,6 +5,7 @@ import { useData } from '../contexts/DataContext.tsx';
 import { BRANCHES } from '../constants.ts';
 import { Users, Search, Building2, ChevronRight, UserCircle2, CheckCircle2 } from 'lucide-react';
 import { CreateStaffModal } from '../components/staff/modals/CreateStaffModal.tsx';
+import { stripSpecialChars } from '../lib/utils.ts';
 
 export const StaffListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -16,9 +17,21 @@ export const StaffListPage: React.FC = () => {
   const filteredStaff = useMemo(() => {
     return staff.filter(s => {
       const matchBranch = selectedBranchId === 'all' || s.branchId === selectedBranchId;
-      const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          s.role.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchBranch && matchSearch;
+      
+      // Lógica de Busca Aprimorada
+      const lowerSearch = searchTerm.toLowerCase();
+      const cleanSearch = stripSpecialChars(searchTerm); // Remove pontos/traços da busca se houver
+      
+      // Verifica nome e cargo (busca textual normal)
+      const matchText = s.name.toLowerCase().includes(lowerSearch) || 
+                        s.role.toLowerCase().includes(lowerSearch);
+      
+      // Verifica CPF (busca numérica sanitizada)
+      // O CPF no banco já deve estar sanitizado, mas garantimos a limpeza aqui por segurança
+      const staffCpf = s.personalInfo?.cpf ? stripSpecialChars(s.personalInfo.cpf) : '';
+      const matchCpf = cleanSearch.length > 0 && staffCpf.includes(cleanSearch);
+
+      return matchBranch && (matchText || matchCpf);
     });
   }, [staff, selectedBranchId, searchTerm]);
 
@@ -60,7 +73,7 @@ export const StaffListPage: React.FC = () => {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input 
             type="text"
-            placeholder="Buscar por nome ou cargo..."
+            placeholder="Buscar por nome, cargo ou CPF..."
             className="w-full pl-12 pr-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 font-medium placeholder-gray-400"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}

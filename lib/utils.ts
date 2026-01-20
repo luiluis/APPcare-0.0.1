@@ -90,6 +90,14 @@ export const formatCurrency = (val: number | string): string => {
 };
 
 /**
+ * Remove caracteres especiais (máscaras), mantendo apenas números.
+ */
+export const stripSpecialChars = (value: string | undefined | null): string => {
+  if (!value) return '';
+  return value.replace(/\D/g, '');
+};
+
+/**
  * Aplica máscara de CPF (000.000.000-00)
  */
 export const formatCPF = (value: string): string => {
