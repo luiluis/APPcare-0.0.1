@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   Users, Calendar, DollarSign, CheckCircle2, AlertCircle, 
   FileText, Wallet, ChevronLeft, ChevronRight, Calculator, Check,
-  Info
+  Info, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { usePayrollLogic } from '../hooks/usePayrollLogic';
@@ -17,7 +17,8 @@ import { PayrollDetailModal } from '../components/modals/PayrollDetailModal';
 export const PayrollPage: React.FC = () => {
   const { staff, invoices, setInvoices, staffIncidents, selectedBranchId } = useData();
   const { calculateEstimatedSalary } = usePayrollLogic();
-  const { generatePayrollInvoice } = usePayrollGeneration({ invoices, onUpdateInvoices: setInvoices });
+  // Extraindo updatePayrollInvoice do hook
+  const { generatePayrollInvoice, updatePayrollInvoice } = usePayrollGeneration({ invoices, onUpdateInvoices: setInvoices });
   const { registerPayment } = usePaymentProcessing({ invoices, onUpdateInvoices: setInvoices });
 
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -55,13 +56,21 @@ export const PayrollPage: React.FC = () => {
       // 2. Calcula estimativa usando a nova lógica granular
       const calculation = calculateEstimatedSalary(employee, staffIncidents, month, year);
 
+      // 3. Verifica se o valor da fatura existente difere do cálculo atual (perfil alterado)
+      // Apenas para faturas pendentes ou atrasadas (não pagas)
+      const isOutdated = existingInvoice && 
+                         existingInvoice.status !== InvoiceStatus.PAID && 
+                         Math.abs(existingInvoice.totalAmount - calculation.netTotal) > 1; // Margem de 1 centavo
+
       return {
         staff: employee,
         invoice: existingInvoice,
         calculation: calculation, // Novo objeto detalhado
-        // Se existe fatura, usa o valor dela. Se não, usa a estimativa líquida.
+        // Se existe fatura, usa o valor dela para exibição (mesmo que esteja outdated, mostramos o real do banco). 
+        // Se não, usa a estimativa.
         finalAmount: existingInvoice ? existingInvoice.totalAmount : calculation.netTotal,
-        status: existingInvoice ? existingInvoice.status : 'not_generated'
+        status: existingInvoice ? existingInvoice.status : 'not_generated',
+        isOutdated // Flag para UI
       };
     });
   }, [filteredStaff, invoices, staffIncidents, month, year, calculateEstimatedSalary]);
@@ -90,13 +99,12 @@ export const PayrollPage: React.FC = () => {
 
     payrollMap.forEach(item => {
       if (item.status === 'not_generated') {
-        // Gera fatura usando o total líquido calculado
+        // Gera fatura detalhada passando o objeto calculation completo
         generatePayrollInvoice(
           item.staff,
-          item.calculation.netTotal,
+          item.calculation,
           new Date(year, month, 5).toISOString().split('T')[0],
-          `Salário ${month.toString().padStart(2, '0')}/${year}`,
-          InvoiceCategory.SALARIO
+          `Salário ${month.toString().padStart(2, '0')}/${year}`
         );
       }
     });
@@ -107,6 +115,24 @@ export const PayrollPage: React.FC = () => {
         const today = new Date().toISOString().split('T')[0];
         registerPayment(invoiceId, amount / 100, 'transferencia', today, 'Pagamento via Painel RH');
     }
+  };
+
+  const handleSyncInvoice = (item: typeof payrollMap[0]) => {
+      if (!item.invoice) return;
+      
+      const msg = `ATENÇÃO: O valor da folha será atualizado.\n\n` +
+                  `Valor Atual (Fatura): ${formatCurrency(item.invoice.totalAmount)}\n` +
+                  `Novo Valor (Cadastro): ${formatCurrency(item.calculation.netTotal)}\n\n` +
+                  `Deseja confirmar a atualização?`;
+
+      if (confirm(msg)) {
+          updatePayrollInvoice(
+              item.invoice.id,
+              item.staff,
+              item.calculation,
+              item.invoice.dueDate // Mantém a data de vencimento original
+          );
+      }
   };
 
   const handleOpenDetail = (item: typeof payrollMap[0]) => {
@@ -230,27 +256,52 @@ export const PayrollPage: React.FC = () => {
                               </td>
                               <td className="px-6 py-4 text-center">
                                   {item.status === 'not_generated' && <span className="inline-flex px-2.5 py-1 rounded-md bg-gray-100 text-gray-500 text-xs font-bold uppercase">Simulação</span>}
-                                  {item.status === InvoiceStatus.PENDING && <span className="inline-flex px-2.5 py-1 rounded-md bg-amber-100 text-amber-700 text-xs font-bold uppercase">Pendente</span>}
+                                  {item.status === InvoiceStatus.PENDING && (
+                                      <div className="flex items-center justify-center gap-1.5">
+                                          <span className="inline-flex px-2.5 py-1 rounded-md bg-amber-100 text-amber-700 text-xs font-bold uppercase">Pendente</span>
+                                          {item.isOutdated && (
+                                              <div className="text-amber-500 animate-pulse" title="Valor diverge do cadastro atual. Necessário recalcular.">
+                                                  <AlertTriangle className="w-4 h-4" />
+                                              </div>
+                                          )}
+                                      </div>
+                                  )}
                                   {item.status === InvoiceStatus.PAID && <span className="inline-flex px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 text-xs font-bold uppercase">Pago</span>}
                               </td>
                               <td className="px-6 py-4 text-center">
                                   <div className="flex items-center justify-center gap-2">
-                                      <button 
-                                        onClick={() => handleOpenDetail(item)}
-                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
-                                        title="Ver Holerite Detalhado"
-                                      >
-                                          <FileText className="w-4 h-4" />
-                                      </button>
-                                      
-                                      {isGenerated && item.status !== InvoiceStatus.PAID && (
-                                          <button 
-                                              onClick={() => handleQuickPay(item.invoice!.id, item.finalAmount)}
-                                              className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" 
-                                              title="Confirmar Pagamento"
-                                          >
-                                              <Check className="w-4 h-4" />
-                                          </button>
+                                      {isGenerated ? (
+                                          <>
+                                            {item.isOutdated ? (
+                                                <button 
+                                                    onClick={() => handleSyncInvoice(item)}
+                                                    className="p-2 text-amber-600 hover:bg-amber-50 bg-amber-50/50 rounded-lg transition-colors border border-amber-200"
+                                                    title={`Recalcular: Valor Fatura (${formatCurrency(item.invoice?.totalAmount)}) ≠ Novo Cálculo (${formatCurrency(item.calculation.netTotal)})`}
+                                                >
+                                                    <RefreshCw className="w-4 h-4" />
+                                                </button>
+                                            ) : (
+                                                <button 
+                                                    onClick={() => handleOpenDetail(item)}
+                                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
+                                                    title="Ver Holerite Detalhado"
+                                                >
+                                                    <FileText className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            
+                                            {item.status !== InvoiceStatus.PAID && (
+                                                <button 
+                                                    onClick={() => handleQuickPay(item.invoice!.id, item.finalAmount)}
+                                                    className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" 
+                                                    title="Confirmar Pagamento"
+                                                >
+                                                    <Check className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                          </>
+                                      ) : (
+                                          <span className="text-xs text-gray-400 italic">Gere a folha</span>
                                       )}
                                   </div>
                               </td>

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Staff, Dependent } from '../../types';
 import { 
   User, Briefcase, Wallet, ChevronDown, ChevronUp, 
-  Save, Plus, Trash2, CheckCircle2, Building2
+  Save, Plus, Trash2, CheckCircle2, Building2, Banknote, CreditCard
 } from 'lucide-react';
 import { formatCPF, formatPhone, stripSpecialChars } from '../../lib/utils';
 
@@ -67,7 +67,7 @@ const MoneyInput = ({
 
 export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) => {
   const [formData, setFormData] = useState<Staff>(staff);
-  const [activeSection, setActiveSection] = useState<'personal' | 'contract' | 'finance'>('personal');
+  const [activeSection, setActiveSection] = useState<'personal' | 'contract' | 'banking'>('personal');
   const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
@@ -270,205 +270,198 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
         )}
       </div>
 
-      {/* --- SEÇÃO 2: CONTRATO & OCUPAÇÃO --- */}
+      {/* --- SEÇÃO 2: CONTRATO & REMUNERAÇÃO --- */}
       <div className="border-b border-gray-100">
-        <AccordionHeader id="contract" title="Contrato & Ocupação" icon={Briefcase} isOpen={activeSection === 'contract'} />
+        <AccordionHeader id="contract" title="Contrato & Remuneração" icon={Briefcase} isOpen={activeSection === 'contract'} />
         
         {activeSection === 'contract' && (
-          <div className="p-6 bg-white grid grid-cols-1 md:grid-cols-2 gap-5 animate-in slide-in-from-top-2">
-             <div className="md:col-span-2">
-                <label className={labelClass}>Cargo / Função na Carteira</label>
-                <input className={inputClass} value={formData.contractInfo?.jobTitle || ''} onChange={e => handleChange('contractInfo', 'jobTitle', e.target.value)} />
-             </div>
+          <div className="p-6 bg-white animate-in slide-in-from-top-2">
+             
+             {/* GRID PRINCIPAL: 2 COLUNAS (CARGO vs VALORES) */}
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                
+                {/* COLUNA ESQUERDA: DADOS DO CARGO */}
+                <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-2 mb-4">Dados do Cargo</h4>
+                    
+                    <div>
+                        <label className={labelClass}>Cargo / Função na Carteira</label>
+                        <input className={inputClass} value={formData.contractInfo?.jobTitle || ''} onChange={e => handleChange('contractInfo', 'jobTitle', e.target.value)} />
+                    </div>
 
-             <div>
-                <label className={labelClass}>Departamento</label>
-                <select className={inputClass} value={formData.contractInfo?.department || 'enfermagem'} onChange={e => handleChange('contractInfo', 'department', e.target.value)}>
-                  <option value="enfermagem">Enfermagem</option>
-                  <option value="administrativo">Administrativo</option>
-                  <option value="limpeza">Limpeza</option>
-                  <option value="cozinha">Cozinha</option>
-                  <option value="manutencao">Manutenção</option>
-                </select>
-             </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className={labelClass}>Departamento</label>
+                            <select className={inputClass} value={formData.contractInfo?.department || 'enfermagem'} onChange={e => handleChange('contractInfo', 'department', e.target.value)}>
+                            <option value="enfermagem">Enfermagem</option>
+                            <option value="administrativo">Administrativo</option>
+                            <option value="limpeza">Limpeza</option>
+                            <option value="cozinha">Cozinha</option>
+                            <option value="manutencao">Manutenção</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className={labelClass}>Data Admissão</label>
+                            <input type="date" className={inputClass} value={formData.contractInfo?.admissionDate || ''} onChange={e => handleChange('contractInfo', 'admissionDate', e.target.value)} />
+                        </div>
+                    </div>
 
-             <div>
-                <label className={labelClass}>Data de Admissão</label>
-                <input type="date" className={inputClass} value={formData.contractInfo?.admissionDate || ''} onChange={e => handleChange('contractInfo', 'admissionDate', e.target.value)} />
-             </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className={labelClass}>Escala</label>
+                            <select className={inputClass} value={formData.contractInfo?.scale || '12x36'} onChange={e => handleChange('contractInfo', 'scale', e.target.value)}>
+                            <option value="12x36">12x36</option>
+                            <option value="6x1">6x1</option>
+                            <option value="5x2">5x2</option>
+                            <option value="outra">Outra</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className={labelClass}>Turno</label>
+                            <select className={inputClass} value={formData.contractInfo?.workShift || 'diurno'} onChange={e => handleChange('contractInfo', 'workShift', e.target.value)}>
+                            <option value="diurno">Diurno</option>
+                            <option value="noturno">Noturno</option>
+                            </select>
+                        </div>
+                    </div>
 
-             <div>
-                <label className={labelClass}>Escala</label>
-                <select className={inputClass} value={formData.contractInfo?.scale || '12x36'} onChange={e => handleChange('contractInfo', 'scale', e.target.value)}>
-                  <option value="12x36">12x36</option>
-                  <option value="6x1">6x1</option>
-                  <option value="5x2">5x2</option>
-                  <option value="outra">Outra</option>
-                </select>
-             </div>
-
-             <div>
-                <label className={labelClass}>Turno</label>
-                <select className={inputClass} value={formData.contractInfo?.workShift || 'diurno'} onChange={e => handleChange('contractInfo', 'workShift', e.target.value)}>
-                  <option value="diurno">Diurno</option>
-                  <option value="noturno">Noturno</option>
-                </select>
-             </div>
-
-             <div className="md:col-span-2 p-4 bg-blue-50 border border-blue-100 rounded-xl mt-2 flex gap-4">
-                <div className="flex-1">
-                   <label className="text-[10px] font-bold text-blue-600 mb-1 block uppercase">Registro Profissional (Nº)</label>
-                   <input className="w-full bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-medium text-blue-900 focus:ring-2 focus:ring-blue-400 outline-none" value={formData.professionalInfo?.corenNumber || ''} onChange={e => handleChange('professionalInfo', 'corenNumber', e.target.value)} placeholder="Ex: 123456" />
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex gap-3 items-center">
+                       <Building2 className="w-5 h-5 text-gray-400" />
+                       <div className="flex-1">
+                           <label className="text-[10px] font-bold text-gray-500 block uppercase">Registro Profissional (Coren/Etc)</label>
+                           <input className="bg-transparent text-sm font-medium text-gray-900 outline-none w-full" value={formData.professionalInfo?.corenNumber || ''} onChange={e => handleChange('professionalInfo', 'corenNumber', e.target.value)} placeholder="Ex: 123456" />
+                       </div>
+                       <input className="w-12 bg-white border border-gray-200 rounded p-1 text-center text-sm font-bold uppercase" value={formData.professionalInfo?.corenState || ''} onChange={e => handleChange('professionalInfo', 'corenState', e.target.value)} maxLength={2} placeholder="UF" />
+                    </div>
                 </div>
-                <div className="w-24">
-                   <label className="text-[10px] font-bold text-blue-600 mb-1 block uppercase">UF</label>
-                   <input className="w-full bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-medium text-blue-900 focus:ring-2 focus:ring-blue-400 outline-none uppercase" value={formData.professionalInfo?.corenState || ''} onChange={e => handleChange('professionalInfo', 'corenState', e.target.value)} maxLength={2} placeholder="SP" />
+
+                {/* COLUNA DIREITA: VALORES */}
+                <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-blue-600 uppercase tracking-wider border-b border-blue-100 pb-2 mb-4">Composição Salarial</h4>
+                    
+                    <div className="bg-blue-50 p-5 rounded-xl border border-blue-100 space-y-5">
+                        <MoneyInput 
+                            label="Salário Base na Carteira"
+                            valueInCents={formData.financialInfo?.baseSalary}
+                            onChange={(cents) => handleChange('financialInfo', 'baseSalary', cents)}
+                            className="text-lg"
+                        />
+
+                        <div>
+                            <label className="text-xs font-bold text-blue-800 uppercase tracking-wide mb-1.5 block">Adicional de Insalubridade</label>
+                            <select 
+                                className={`${inputClass} border-blue-200 focus:ring-blue-500`}
+                                value={formData.financialInfo?.insalubridadeLevel || 0}
+                                onChange={e => handleChange('financialInfo', 'insalubridadeLevel', parseInt(e.target.value))}
+                            >
+                                <option value={0}>0% - Não Recebe</option>
+                                <option value={20}>20% - Grau Médio (Sobre Sal. Mín.)</option>
+                                <option value={40}>40% - Grau Máximo (Sobre Sal. Mín.)</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
              </div>
+
+             {/* SEÇÃO INFERIOR: BENEFÍCIOS E DESCONTOS (FULL WIDTH) */}
+             <div className="border-t border-gray-100 pt-6">
+                 <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-4">Benefícios & Descontos</h4>
+                 
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     {/* Benefícios (Checks) */}
+                     <div className="space-y-3">
+                        <div className="bg-white border border-gray-200 p-3 rounded-xl flex items-center gap-3 hover:border-blue-300 transition-all cursor-pointer shadow-sm group" onClick={() => handleChange('benefits', 'receivesTransportVoucher', !formData.benefits?.receivesTransportVoucher)}>
+                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${formData.benefits?.receivesTransportVoucher ? 'bg-blue-600 border-blue-600' : 'border-gray-300 bg-white'}`}>
+                                {formData.benefits?.receivesTransportVoucher && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                            </div>
+                            <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">Recebe Vale Transporte (6% Desc.)</span>
+                        </div>
+
+                        <div className="bg-white border border-gray-200 p-3 rounded-xl flex items-center gap-3 hover:border-blue-300 transition-all cursor-pointer shadow-sm group" onClick={() => handleChange('benefits', 'receivesMealVoucher', !formData.benefits?.receivesMealVoucher)}>
+                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${formData.benefits?.receivesMealVoucher ? 'bg-blue-600 border-blue-600' : 'border-gray-300 bg-white'}`}>
+                                {formData.benefits?.receivesMealVoucher && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                            </div>
+                            <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">Recebe Vale Refeição</span>
+                        </div>
+                     </div>
+
+                     {/* Descontos Fixos */}
+                     <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                        <div className="flex justify-between items-center mb-3">
+                            <span className="text-xs font-bold text-gray-500 uppercase">Descontos Fixos Recorrentes</span>
+                            <button onClick={addCustomDeduction} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors uppercase border border-blue-200 bg-white">+ Adicionar</button>
+                        </div>
+                        <div className="space-y-2">
+                            {formData.financialInfo?.customDeductions?.map((item, idx) => (
+                                <div key={idx} className="flex gap-2 items-center">
+                                    <input 
+                                        className={`${inputClass} text-xs py-1.5`}
+                                        placeholder="Ex: Convênio"
+                                        value={item.description} 
+                                        onChange={e => updateCustomDeduction(idx, 'description', e.target.value)} 
+                                    />
+                                    <div className="w-24">
+                                        <input 
+                                            className={`${inputClass} text-xs py-1.5 text-right font-mono`}
+                                            value={(item.amount / 100).toFixed(2)}
+                                            onChange={e => {
+                                                const raw = e.target.value.replace(/\D/g, '');
+                                                updateCustomDeduction(idx, 'amount', parseInt(raw) || 0);
+                                            }}
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                    <button onClick={() => removeCustomDeduction(idx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4"/></button>
+                                </div>
+                            ))}
+                            {(!formData.financialInfo?.customDeductions || formData.financialInfo.customDeductions.length === 0) && (
+                                <p className="text-xs text-gray-400 italic text-center py-2">Nenhum desconto extra.</p>
+                            )}
+                        </div>
+                     </div>
+                 </div>
+             </div>
+
           </div>
         )}
       </div>
 
-      {/* --- SEÇÃO 3: FINANCEIRO --- */}
+      {/* --- SEÇÃO 3: DADOS BANCÁRIOS --- */}
       <div className="border-b border-gray-100">
-        <AccordionHeader id="finance" title="Financeiro & Benefícios" icon={Wallet} isOpen={activeSection === 'finance'} />
+        <AccordionHeader id="banking" title="Dados Bancários" icon={CreditCard} isOpen={activeSection === 'banking'} />
         
-        {activeSection === 'finance' && (
-          <div className="p-6 bg-white space-y-6 animate-in slide-in-from-top-2">
-             
-             {/* Salário em Destaque */}
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-5 rounded-xl border border-gray-100">
-                <div className="md:col-span-2">
-                    <MoneyInput 
-                      label="Salário Base (R$)"
-                      valueInCents={formData.financialInfo?.baseSalary}
-                      onChange={(cents) => handleChange('financialInfo', 'baseSalary', cents)}
-                      className="text-lg"
-                    />
+        {activeSection === 'banking' && (
+          <div className="p-6 bg-white animate-in slide-in-from-top-2">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-1">
+                   <label className={labelClass}>Banco</label>
+                   <input className={inputClass} placeholder="Ex: Itaú (341)" value={formData.financialInfo?.bankInfo.banco || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'banco', e.target.value)} />
                 </div>
                 <div>
-                  <label className={labelClass}>Insalubridade</label>
-                  <select 
-                    className={inputClass}
-                    value={formData.financialInfo?.insalubridadeLevel || 0}
-                    onChange={e => handleChange('financialInfo', 'insalubridadeLevel', parseInt(e.target.value))}
-                  >
-                    <option value={0}>0% - Não Recebe</option>
-                    <option value={20}>20% - Grau Médio</option>
-                    <option value={40}>40% - Grau Máximo</option>
-                  </select>
+                   <label className={labelClass}>Agência</label>
+                   <input className={inputClass} placeholder="0000" value={formData.financialInfo?.bankInfo.agencia || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'agencia', e.target.value)} />
                 </div>
-                <div className="flex items-end pb-2">
-                    <span className="text-xs text-gray-400 font-medium">
-                        * Adicional calculado sobre o salário mínimo vigente.
-                    </span>
+                <div>
+                   <label className={labelClass}>Conta</label>
+                   <input className={inputClass} placeholder="00000-0" value={formData.financialInfo?.bankInfo.conta || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'conta', e.target.value)} />
                 </div>
-             </div>
-
-             {/* Descontos Fixos */}
-             <div>
-                <div className="flex justify-between items-center mb-3">
-                    <h4 className="font-bold text-gray-700 text-sm uppercase tracking-wide">Descontos Fixos</h4>
-                    <button 
-                        onClick={addCustomDeduction}
-                        className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"
-                    >
-                        <Plus className="w-3 h-3" /> Adicionar
-                    </button>
-                </div>
-
-                <div className="space-y-3">
-                    {formData.financialInfo?.customDeductions?.map((item, idx) => (
-                        <div key={idx} className="flex gap-3 items-center">
-                            <input 
-                                className={`${inputClass} flex-grow`}
-                                placeholder="Descrição (Ex: Plano de Saúde)"
-                                value={item.description} 
-                                onChange={e => updateCustomDeduction(idx, 'description', e.target.value)} 
-                            />
-                            <div className="w-32">
-                                <MoneyInput 
-                                    valueInCents={item.amount}
-                                    onChange={(cents) => updateCustomDeduction(idx, 'amount', cents)}
-                                    placeholder="0,00"
-                                />
-                            </div>
-                            <button 
-                                onClick={() => removeCustomDeduction(idx)}
-                                className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                                <Trash2 className="w-4 h-4"/>
-                            </button>
-                        </div>
-                    ))}
-                    {(!formData.financialInfo?.customDeductions || formData.financialInfo.customDeductions.length === 0) && (
-                        <p className="text-sm text-gray-400 italic bg-gray-50 p-3 rounded-lg border border-dashed border-gray-200">Nenhum desconto ou adicional fixo cadastrado.</p>
-                    )}
+                
+                <div className="md:col-span-3 bg-emerald-50 p-4 rounded-xl border border-emerald-100 grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                    <div>
+                       <label className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1.5 block">Tipo Chave Pix</label>
+                       <select className={`${inputClass} border-emerald-200 focus:ring-emerald-500 focus:border-emerald-500`} value={formData.financialInfo?.bankInfo.pixKeyType || 'cpf'} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'pixKeyType', e.target.value)}>
+                          <option value="cpf">CPF</option>
+                          <option value="email">Email</option>
+                          <option value="telefone">Telefone</option>
+                          <option value="aleatoria">Aleatória</option>
+                       </select>
+                    </div>
+                    <div className="md:col-span-2">
+                       <label className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1.5 block">Chave Pix</label>
+                       <input className={`${inputClass} border-emerald-200 focus:ring-emerald-500 focus:border-emerald-500`} value={formData.financialInfo?.bankInfo.pixKey || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'pixKey', e.target.value)} placeholder="Chave Pix" />
+                    </div>
                 </div>
              </div>
-
-             <div className="h-px bg-gray-100"></div>
-
-             {/* Benefícios (Toggles) */}
-             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-white border border-gray-200 p-3 rounded-xl flex items-center gap-3 hover:border-blue-200 transition-colors cursor-pointer" onClick={() => handleChange('benefits', 'receivesTransportVoucher', !formData.benefits?.receivesTransportVoucher)}>
-                    <input 
-                    type="checkbox" 
-                    className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 pointer-events-none"
-                    checked={formData.benefits?.receivesTransportVoucher || false}
-                    readOnly
-                    />
-                    <label className="text-sm font-bold text-gray-700 cursor-pointer">Vale Transporte</label>
-                </div>
-
-                <div className="bg-white border border-gray-200 p-3 rounded-xl flex items-center gap-3 hover:border-blue-200 transition-colors cursor-pointer" onClick={() => handleChange('benefits', 'receivesMealVoucher', !formData.benefits?.receivesMealVoucher)}>
-                    <input 
-                    type="checkbox" 
-                    className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 pointer-events-none"
-                    checked={formData.benefits?.receivesMealVoucher || false}
-                    readOnly
-                    />
-                    <label className="text-sm font-bold text-gray-700 cursor-pointer">Vale Refeição</label>
-                </div>
-             </div>
-
-             <div className="h-px bg-gray-100"></div>
-
-             {/* Dados Bancários */}
-             <div>
-                <h4 className="font-bold text-gray-700 text-sm mb-3 uppercase tracking-wide">Dados Bancários</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                   <div className="md:col-span-1">
-                      <label className={labelClass}>Banco</label>
-                      <input className={inputClass} placeholder="Ex: Itaú (341)" value={formData.financialInfo?.bankInfo.banco || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'banco', e.target.value)} />
-                   </div>
-                   <div>
-                      <label className={labelClass}>Agência</label>
-                      <input className={inputClass} placeholder="0000" value={formData.financialInfo?.bankInfo.agencia || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'agencia', e.target.value)} />
-                   </div>
-                   <div>
-                      <label className={labelClass}>Conta</label>
-                      <input className={inputClass} placeholder="00000-0" value={formData.financialInfo?.bankInfo.conta || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'conta', e.target.value)} />
-                   </div>
-                   
-                   <div className="md:col-span-3 bg-emerald-50 p-4 rounded-xl border border-emerald-100 grid grid-cols-1 md:grid-cols-3 gap-4">
-                       <div>
-                          <label className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1.5 block">Tipo Chave Pix</label>
-                          <select className={`${inputClass} border-emerald-200 focus:ring-emerald-500 focus:border-emerald-500`} value={formData.financialInfo?.bankInfo.pixKeyType || 'cpf'} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'pixKeyType', e.target.value)}>
-                             <option value="cpf">CPF</option>
-                             <option value="email">Email</option>
-                             <option value="telefone">Telefone</option>
-                             <option value="aleatoria">Aleatória</option>
-                          </select>
-                       </div>
-                       <div className="md:col-span-2">
-                          <label className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1.5 block">Chave Pix</label>
-                          <input className={`${inputClass} border-emerald-200 focus:ring-emerald-500 focus:border-emerald-500`} value={formData.financialInfo?.bankInfo.pixKey || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'pixKey', e.target.value)} placeholder="Chave Pix" />
-                       </div>
-                   </div>
-                </div>
-             </div>
-
           </div>
         )}
       </div>
@@ -479,7 +472,7 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
            onClick={handleSave}
            className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md transition-all active:scale-95 hover:-translate-y-0.5"
          >
-            <Save className="w-5 h-5" /> Salvar
+            <Save className="w-5 h-5" /> Salvar Alterações
          </button>
       </div>
 
