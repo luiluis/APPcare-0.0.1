@@ -114,24 +114,68 @@ export const formatDateBr = formatDate;
  */
 
 /**
+ * Converte valor monetário (string ou number) para Centavos (Inteiro) de forma SEGURA.
+ * Evita erros de ponto flutuante (ex: 100.29 * 100 = 10028.999...) manipulando strings.
+ * 
+ * Ex: "R$ 1.250,50" -> 125050
+ * Ex: "1250.50" -> 125050
+ * Ex: "100" -> 10000
+ */
+export const safeCurrencyToCents = (value: string | number | undefined | null): number => {
+  if (value === undefined || value === null || value === '') return 0;
+
+  // Garante string
+  let str = value.toString();
+
+  // 1. Remove tudo que não for dígito, ponto, vírgula ou sinal negativo
+  str = str.replace(/[^\d.,-]/g, '');
+
+  if (!str) return 0;
+
+  // 2. Detecta separador decimal
+  // Assume que o último ponto ou vírgula é o separador decimal
+  const lastDotIndex = str.lastIndexOf('.');
+  const lastCommaIndex = str.lastIndexOf(',');
+  const separatorIndex = Math.max(lastDotIndex, lastCommaIndex);
+
+  let integerPart = '';
+  let decimalPart = '';
+
+  if (separatorIndex === -1) {
+    // Sem separador: assumimos que é o valor inteiro (ex: "100" = R$ 100,00)
+    integerPart = str.replace(/\D/g, ''); // Remove sinal se estiver no meio
+    decimalPart = '00';
+  } else {
+    // Com separador
+    // Parte inteira: tudo antes do separador (removemos pontuações de milhar se houver)
+    integerPart = str.substring(0, separatorIndex).replace(/\D/g, '');
+    // Parte decimal: tudo depois
+    decimalPart = str.substring(separatorIndex + 1).replace(/\D/g, '');
+  }
+
+  // Tratamento de sinal
+  const isNegative = str.includes('-');
+
+  // Padronização da parte decimal para 2 dígitos
+  if (decimalPart.length === 0) decimalPart = '00';
+  else if (decimalPart.length === 1) decimalPart = decimalPart + '0';
+  else if (decimalPart.length > 2) decimalPart = decimalPart.substring(0, 2); // Trunca milésimos
+
+  // Concatena string e converte para inteiro (base 10)
+  // Ex: "1250" + "50" -> 125050
+  const cents = parseInt(integerPart + decimalPart, 10);
+
+  if (isNaN(cents)) return 0;
+
+  return isNegative ? -cents : cents;
+};
+
+/**
  * Converte valor (string ou float) para Centavos (Inteiro).
- * Ex: "10,50" -> 1050 | 10.50 -> 1050 | "0.33" -> 33
+ * Wrapper para safeCurrencyToCents para compatibilidade.
  */
 export const toCents = (amount: number | string): number => {
-  if (amount === undefined || amount === null) return 0;
-  
-  if (typeof amount === 'string') {
-      // Remove R$, espaços e caracteres estranhos, mas MANTÉM dígitos, pontos, vírgulas e sinal de menos.
-      // Regex antiga: /[^\d,-]/g (Removia pontos, quebrando inputs como "0.33")
-      const clean = amount.replace(/[^\d.,-]/g, '').replace(',', '.');
-      
-      const floatVal = parseFloat(clean);
-      if (isNaN(floatVal)) return 0;
-      return Math.round(floatVal * 100);
-  }
-  
-  // Se já for número, assume que pode ser float e converte
-  return Math.round(amount * 100);
+  return safeCurrencyToCents(amount);
 };
 
 /**

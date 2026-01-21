@@ -3,14 +3,14 @@ import React, { useState, useMemo } from 'react';
 import { 
   Users, Calendar, DollarSign, CheckCircle2, AlertCircle, 
   FileText, Wallet, ChevronLeft, ChevronRight, Calculator, Check,
-  Info, RefreshCw, AlertTriangle, Loader2
+  Info, RefreshCw, AlertTriangle, Loader2, Eye
 } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { usePayrollLogic } from '../hooks/usePayrollLogic';
 import { usePayrollGeneration } from '../hooks/usePayrollGeneration';
 import { usePaymentProcessing } from '../hooks/usePaymentProcessing';
 import { formatCurrency, formatDateBr } from '../lib/utils';
-import { InvoiceStatus, InvoiceCategory, PayrollLineItem, PayrollCalculationResult } from '../types';
+import { InvoiceStatus, InvoiceCategory, PayrollLineItem, PayrollCalculationResult, Invoice } from '../types';
 import { StatCard } from '../components/StatCard';
 import { PayrollDetailModal } from '../components/modals/PayrollDetailModal';
 
@@ -32,6 +32,7 @@ export const PayrollPage: React.FC = () => {
       name: string;
       role: string;
       calculation: PayrollCalculationResult;
+      invoice?: Invoice | null;
   } | null>(null);
 
   // --- FILTRO DE FUNCIONÁRIOS (Por Unidade) ---
@@ -150,7 +151,8 @@ export const PayrollPage: React.FC = () => {
       setSelectedDetail({
           name: item.staff.name,
           role: item.staff.role,
-          calculation: item.calculation
+          calculation: item.calculation,
+          invoice: item.invoice
       });
       setDetailModalOpen(true);
   };
@@ -282,23 +284,24 @@ export const PayrollPage: React.FC = () => {
                               </td>
                               <td className="px-6 py-4 text-center">
                                   <div className="flex items-center justify-center gap-2">
-                                      {isGenerated ? (
+                                      {/* Botão de Detalhes (Sempre Visível) */}
+                                      <button 
+                                          onClick={() => handleOpenDetail(item)}
+                                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
+                                          title={isGenerated ? "Ver Holerite Detalhado" : "Ver Simulação de Cálculo"}
+                                      >
+                                          {isGenerated ? <FileText className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                      </button>
+
+                                      {isGenerated && (
                                           <>
-                                            {item.isOutdated ? (
+                                            {item.isOutdated && (
                                                 <button 
                                                     onClick={() => handleSyncInvoice(item)}
                                                     className="p-2 text-amber-600 hover:bg-amber-50 bg-amber-50/50 rounded-lg transition-colors border border-amber-200"
                                                     title={`Recalcular: Valor Fatura (${formatCurrency(item.invoice?.totalAmount)}) ≠ Novo Cálculo (${formatCurrency(item.calculation.netTotal)})`}
                                                 >
                                                     <RefreshCw className="w-4 h-4" />
-                                                </button>
-                                            ) : (
-                                                <button 
-                                                    onClick={() => handleOpenDetail(item)}
-                                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
-                                                    title="Ver Holerite Detalhado"
-                                                >
-                                                    <FileText className="w-4 h-4" />
                                                 </button>
                                             )}
                                             
@@ -312,8 +315,6 @@ export const PayrollPage: React.FC = () => {
                                                 </button>
                                             )}
                                           </>
-                                      ) : (
-                                          <span className="text-xs text-gray-400 italic">Gere a folha</span>
                                       )}
                                   </div>
                               </td>
@@ -338,6 +339,7 @@ export const PayrollPage: React.FC = () => {
         staffRole={selectedDetail?.role || ''}
         competence={selectedDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
         calculation={selectedDetail?.calculation || null}
+        invoice={selectedDetail?.invoice || null}
       />
 
     </div>

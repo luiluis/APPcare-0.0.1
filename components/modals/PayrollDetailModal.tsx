@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
-import { X, Printer, HelpCircle, ChevronDown, ChevronUp, Calculator } from 'lucide-react';
-import { PayrollCalculationResult } from '../../types';
+import React, { useState, useMemo } from 'react';
+import { X, Printer, HelpCircle, ChevronDown, ChevronUp, Calculator, FileText, AlertCircle } from 'lucide-react';
+import { PayrollCalculationResult, Invoice } from '../../types';
 import { formatCurrency } from '../../lib/utils';
 
 interface PayrollDetailModalProps {
@@ -10,7 +10,8 @@ interface PayrollDetailModalProps {
   staffName: string;
   staffRole: string;
   competence: string; // Ex: "Outubro/2023"
-  calculation: PayrollCalculationResult | null;
+  calculation?: PayrollCalculationResult | null;
+  invoice?: Invoice | null; // Nova prop opcional para exibir fatura já gerada
 }
 
 export const PayrollDetailModal: React.FC<PayrollDetailModalProps> = ({
@@ -19,15 +20,58 @@ export const PayrollDetailModal: React.FC<PayrollDetailModalProps> = ({
   staffName,
   staffRole,
   competence,
-  calculation
+  calculation,
+  invoice
 }) => {
   const [showExplainer, setShowExplainer] = useState(false);
 
-  if (!isOpen || !calculation) return null;
+  // Normalização dos Dados (Adapter Pattern)
+  const displayData = useMemo(() => {
+    // 1. Prioridade: Fatura Gerada (Dados Reais/Persistidos)
+    if (invoice) {
+        const items = invoice.items.map(item => ({
+            id: item.id,
+            label: item.description,
+            // Tenta extrair referência do texto se possível, senão vazio
+            reference: item.description.includes('(') ? item.description.match(/\((.*?)\)/)?.[1] : '-',
+            // Na fatura, descontos são salvos como negativos
+            type: item.amount < 0 ? 'deduction' : 'earning',
+            amount: Math.abs(item.amount),
+            originalAmount: item.amount
+        }));
 
-  const inssItem = calculation.items.find(i => i.id === 'inss');
-  // Recupera a memória de cálculo que foi concatenada com ' | ' no hook
-  const inssBreakdown = inssItem?.description ? inssItem.description.split(' | ') : [];
+        const gross = items.filter(i => i.type === 'earning').reduce((acc, i) => acc + i.amount, 0);
+        const discount = items.filter(i => i.type === 'deduction').reduce((acc, i) => acc + i.amount, 0);
+
+        return {
+            mode: 'invoice',
+            items,
+            grossTotal: gross,
+            discountTotal: discount,
+            netTotal: invoice.totalAmount,
+            inssItem: null // Faturas simples perdem a memória de cálculo detalhada
+        };
+    }
+
+    // 2. Fallback: Simulação em Tempo Real
+    if (calculation) {
+        return {
+            mode: 'simulation',
+            items: calculation.items,
+            grossTotal: calculation.grossTotal,
+            discountTotal: calculation.discountTotal,
+            netTotal: calculation.netTotal,
+            inssItem: calculation.items.find(i => i.id === 'inss')
+        };
+    }
+
+    return null;
+  }, [invoice, calculation]);
+
+  if (!isOpen || !displayData) return null;
+
+  // Recupera a memória de cálculo (apenas disponível em modo Simulação)
+  const inssBreakdown = displayData.inssItem?.description ? displayData.inssItem.description.split(' | ') : [];
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
@@ -36,7 +80,18 @@ export const PayrollDetailModal: React.FC<PayrollDetailModalProps> = ({
         {/* Header - Estilo Institucional */}
         <div className="bg-slate-900 text-white p-6 flex justify-between items-start">
           <div>
-            <h2 className="text-xl font-bold">{staffName}</h2>
+            <div className="flex items-center gap-3">
+                <h2 className="text-xl font-bold">{staffName}</h2>
+                {displayData.mode === 'simulation' ? (
+                    <span className="bg-amber-400 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded uppercase flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" /> Simulação (Prévia)
+                    </span>
+                ) : (
+                    <span className="bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase flex items-center gap-1">
+                        <FileText className="w-3 h-3" /> Folha Oficial
+                    </span>
+                )}
+            </div>
             <div className="flex items-center gap-3 text-slate-300 text-sm mt-1">
               <span className="uppercase tracking-wider font-semibold">{staffRole}</span>
               <span className="w-1 h-1 bg-slate-500 rounded-full"></span>
@@ -67,9 +122,9 @@ export const PayrollDetailModal: React.FC<PayrollDetailModalProps> = ({
 
             {/* Linhas */}
             <div className="divide-y divide-gray-100 text-sm">
-              {calculation.items.map((item) => (
-                <div key={item.id} className="grid grid-cols-12 py-3 px-4 hover:bg-blue-50/30 transition-colors items-center">
-                  <div className="col-span-6 font-medium text-gray-900">
+              {displayData.items.map((item, idx) => (
+                <div key={item.id || idx} className="grid grid-cols-12 py-3 px-4 hover:bg-blue-50/30 transition-colors items-center">
+                  <div className="col-span-6 font-medium text-gray-900 truncate pr-2">
                     {item.label}
                   </div>
                   <div className="col-span-2 text-center text-gray-500 text-xs">
@@ -90,22 +145,22 @@ export const PayrollDetailModal: React.FC<PayrollDetailModalProps> = ({
               <div className="grid grid-cols-3 gap-6">
                 <div className="text-right border-r border-gray-200 pr-6">
                   <p className="text-xs text-gray-500 uppercase font-bold">Total Bruto</p>
-                  <p className="text-gray-900 font-bold tabular-nums">{formatCurrency(calculation.grossTotal)}</p>
+                  <p className="text-gray-900 font-bold tabular-nums">{formatCurrency(displayData.grossTotal)}</p>
                 </div>
                 <div className="text-right border-r border-gray-200 pr-6">
                   <p className="text-xs text-gray-500 uppercase font-bold">Total Descontos</p>
-                  <p className="text-rose-600 font-bold tabular-nums">{formatCurrency(calculation.discountTotal)}</p>
+                  <p className="text-rose-600 font-bold tabular-nums">{formatCurrency(displayData.discountTotal)}</p>
                 </div>
                 <div className="text-right bg-emerald-100/50 -my-4 -mr-4 p-4 flex flex-col justify-center rounded-l-xl">
                   <p className="text-xs text-emerald-800 uppercase font-extrabold">Salário Líquido</p>
-                  <p className="text-xl text-emerald-700 font-bold tabular-nums">{formatCurrency(calculation.netTotal)}</p>
+                  <p className="text-xl text-emerald-700 font-bold tabular-nums">{formatCurrency(displayData.netTotal)}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Memória de Cálculo (Accordion) */}
-          {inssBreakdown.length > 0 && (
+          {/* Memória de Cálculo (Apenas Simulação) */}
+          {displayData.mode === 'simulation' && inssBreakdown.length > 0 && (
             <div className="mt-6 border border-indigo-100 rounded-xl bg-indigo-50/30 overflow-hidden">
               <button 
                 onClick={() => setShowExplainer(!showExplainer)}
@@ -113,7 +168,7 @@ export const PayrollDetailModal: React.FC<PayrollDetailModalProps> = ({
               >
                 <div className="flex items-center gap-2 text-indigo-900 font-bold text-sm">
                   <HelpCircle className="w-4 h-4 text-indigo-500" />
-                  Entenda o cálculo do INSS (Progressivo)
+                  Entenda o cálculo do INSS (Simulado)
                 </div>
                 {showExplainer ? <ChevronUp className="w-4 h-4 text-indigo-400"/> : <ChevronDown className="w-4 h-4 text-indigo-400"/>}
               </button>
@@ -131,7 +186,7 @@ export const PayrollDetailModal: React.FC<PayrollDetailModalProps> = ({
                       </div>
                     ))}
                     <div className="mt-2 pt-2 border-t border-gray-100 text-right">
-                       <span className="text-indigo-600 font-bold">Total INSS: {formatCurrency(inssItem?.amount)}</span>
+                       <span className="text-indigo-600 font-bold">Total INSS: {formatCurrency(displayData.inssItem?.amount)}</span>
                     </div>
                   </div>
                 </div>

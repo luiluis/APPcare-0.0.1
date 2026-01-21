@@ -1,7 +1,7 @@
 
 import { useState, useMemo } from 'react';
 import { Invoice, InvoiceItem, InvoiceStatus, InvoiceCategory, CreateInvoiceDTO, QuickConsumeDTO } from '../types';
-import { toCents, parseDateToUTC, sanitizeInput } from '../lib/utils';
+import { safeCurrencyToCents, parseDateToUTC, sanitizeInput } from '../lib/utils';
 import { storageService } from '../services/storageService';
 
 interface UseInvoiceLogicProps {
@@ -29,11 +29,11 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
   // --- Core Invoice Actions (CRUD) ---
 
   const createRecurringInvoices = async (data: CreateInvoiceDTO) => {
-    // CONVERSÃO CRÍTICA: String Input -> Centavos
-    const amountCents = toCents(data.amount);
+    // CONVERSÃO SEGURA: String Input -> Centavos sem float math
+    const amountCents = safeCurrencyToCents(data.amount);
 
-    if (amountCents === 0 && parseFloat(data.amount) !== 0) {
-        console.error("Valor inválido fornecido (zero ou NaN)");
+    if (amountCents === 0 && data.amount !== '' && data.amount !== '0' && data.amount !== '0,00') {
+        console.warn("Possível erro de conversão monetária ou valor zero inserido.");
     }
 
     // Sanitização para prevenir XSS
@@ -92,11 +92,11 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
   };
 
   const addQuickConsume = async (data: QuickConsumeDTO) => {
-    // Conversão para Centavos
-    const amountCents = toCents(data.amount);
+    // Conversão para Centavos Segura
+    const amountCents = safeCurrencyToCents(data.amount);
 
     if (amountCents <= 0) {
-        console.error("Valor inválido");
+        console.error("Valor inválido para consumo rápido");
         return;
     }
 

@@ -2,7 +2,7 @@
 import { Staff, StaffIncident, TaxTable, PayrollLineItem, PayrollCalculationResult } from '../types';
 import { formatCurrency } from '../lib/utils';
 
-// Tabela Padrão 2024 (Valores em Centavos)
+// Tabela INSS 2024 (Valores em Centavos)
 const INSS_TABLE_2024: TaxTable = {
   year: 2024,
   minWage: 141200, // R$ 1.412,00
@@ -14,6 +14,23 @@ const INSS_TABLE_2024: TaxTable = {
     { limit: 778602, rate: 0.14 },  // De 4.000,04 até 7.786,02
   ]
 };
+
+// Tabela IRRF 2024 (Valores em Centavos)
+// Vigência a partir de Maio/2024 (MP 1.206/2024 convertida na Lei 14.848/2024)
+const IRRF_TABLE_2024: TaxTable = {
+  year: 2024,
+  minWage: 141200, 
+  ceiling: 0, // Não existe teto de contribuição para IR, apenas faixas
+  brackets: [
+    { limit: 225920, rate: 0, deduction: 0 },           // Isento até 2.259,20
+    { limit: 282665, rate: 0.075, deduction: 16944 },   // 7,5% (Deduz 169,44)
+    { limit: 375105, rate: 0.15, deduction: 38144 },    // 15% (Deduz 381,44)
+    { limit: 466468, rate: 0.225, deduction: 66277 },   // 22,5% (Deduz 662,77)
+    { limit: 999999999, rate: 0.275, deduction: 89600 } // 27,5% (Deduz 896,00) - Acima de 4.664,68
+  ]
+};
+
+const DEDUCTION_PER_DEPENDENT = 18959; // R$ 189,59 por dependente
 
 export const usePayrollLogic = () => {
 
@@ -52,6 +69,56 @@ export const usePayrollLogic = () => {
     }
 
     return { total: totalTax, breakdown };
+  };
+
+  /**
+   * Calcula o IRRF (Imposto de Renda Retido na Fonte).
+   * Base de Cálculo = Bruto - INSS - (Dependentes * 189,59)
+   */
+  const calculateIRRF = (
+    grossSalaryCents: number, 
+    inssValueCents: number, 
+    dependentsCount: number,
+    table: TaxTable = IRRF_TABLE_2024
+  ): { value: number, rate: number, breakdown: string } => {
+    
+    const dependentsDeduction = dependentsCount * DEDUCTION_PER_DEPENDENT;
+    
+    // Base de cálculo legal
+    let baseCalculation = grossSalaryCents - inssValueCents - dependentsDeduction;
+    
+    // Proteção contra base negativa
+    if (baseCalculation < 0) baseCalculation = 0;
+
+    let irrfValue = 0;
+    let effectiveRate = 0;
+    let breakdown = '';
+
+    // Encontra a faixa correta na tabela progressiva
+    for (const bracket of table.brackets) {
+        if (baseCalculation <= bracket.limit) {
+            const rawTax = Math.round(baseCalculation * bracket.rate);
+            const deduction = bracket.deduction || 0;
+            
+            irrfValue = rawTax - deduction;
+            effectiveRate = bracket.rate;
+            
+            if (irrfValue < 0) irrfValue = 0; // Imposto não pode ser negativo
+
+            if (irrfValue > 0) {
+                breakdown = `Base: ${formatCurrency(baseCalculation)} | Alíquota: ${(bracket.rate * 100).toFixed(1)}% | Dedução: ${formatCurrency(deduction)}`;
+                if (dependentsCount > 0) {
+                    breakdown += ` | Deps: -${formatCurrency(dependentsDeduction)}`;
+                }
+            } else {
+                breakdown = 'Isento';
+            }
+            
+            break;
+        }
+    }
+
+    return { value: irrfValue, rate: effectiveRate, breakdown };
   };
 
   const calculateEstimatedSalary = (
@@ -132,7 +199,22 @@ export const usePayrollLogic = () => {
         });
     }
 
-    // 6. Vale Transporte (Deduction)
+    // 6. IRRF (Deduction) - NOVO
+    const dependentsCount = staff.dependents?.length || staff.personalInfo?.childrenCount || 0;
+    const irrfResult = calculateIRRF(earnings, inssResult.total, dependentsCount);
+    
+    if (irrfResult.value > 0) {
+        items.push({
+            id: 'irrf',
+            label: 'IRRF',
+            type: 'deduction',
+            amount: irrfResult.value,
+            reference: `${(irrfResult.rate * 100).toFixed(1)}%`,
+            description: irrfResult.breakdown
+        });
+    }
+
+    // 7. Vale Transporte (Deduction)
     if (staff.benefits?.receivesTransportVoucher) {
         // Desconto legal padrão de 6% sobre o salário base
         const vtValue = Math.round(base * 0.06);
@@ -145,7 +227,7 @@ export const usePayrollLogic = () => {
         });
     }
 
-    // 7. Descontos Fixos Personalizados (Ex: Convênio, Empréstimo)
+    // 8. Descontos Fixos Personalizados (Ex: Convênio, Empréstimo)
     staff.financialInfo?.customDeductions?.forEach((ded, idx) => {
         if (ded.amount > 0) {
             items.push({
@@ -157,7 +239,7 @@ export const usePayrollLogic = () => {
         }
     });
 
-    // 8. Totais Finais
+    // 9. Totais Finais
     const grossTotal = items.filter(i => i.type === 'earning').reduce((acc, i) => acc + i.amount, 0);
     const discountTotal = items.filter(i => i.type === 'deduction').reduce((acc, i) => acc + i.amount, 0);
     const netTotal = grossTotal - discountTotal;

@@ -29,6 +29,18 @@ export interface Contact {
   isEmergencyContact?: boolean; 
 }
 
+export interface ContractRecord {
+  id: string;
+  startDate: string;      // Início da vigência deste valor
+  endDate?: string;       // Fim da vigência (null = atual)
+  baseValue: number;      // Em centavos
+  careLevelAdjustment: number;
+  fixedExtras: number;
+  discount: number;
+  readjustmentIndex?: string; // Ex: 'IPCA', 'IGPM', 'Manual', 'Aditivo'
+  notes?: string;
+}
+
 export interface FeeConfig {
   baseValue: number;          // Em centavos (R$ 10,00 -> 1000)
   careLevelAdjustment: number; // Em centavos
@@ -43,6 +55,7 @@ export interface FeeConfig {
 export interface TaxBracket {
   limit: number; // Teto da faixa em centavos
   rate: number;  // Alíquota (0.075, 0.09, etc)
+  deduction?: number; // Parcela a deduzir em centavos (IRRF)
 }
 
 export interface TaxTable {
@@ -95,6 +108,7 @@ export interface Resident {
   careLevel: 1 | 2 | 3;
   admissionDate: string;
   feeConfig?: FeeConfig; 
+  contractHistory?: ContractRecord[]; // Histórico de reajustes
   benefitValue?: number; // Em centavos
   created_at?: string;
   prescriptions?: Prescription[];
