@@ -118,19 +118,52 @@ export const dataService = {
             });
         }
 
-        // B. Férias Vencidas (> 1 ano de casa)
-        // Simplificação: Se tem mais de 1 ano e 1 mês, gera alerta "Férias a Vencer/Vencidas"
+        // B. Férias Vencidas (Lógica Inteligente)
+        // Se tem mais de 1 ano de casa, verifica se tirou férias
         if (diffYears >= 1.0) {
-             // Num sistema real verificaria a tabela de ferias gozadas
-             alerts.push({
-                id: `vac-${staff.id}`,
-                staffId: staff.id,
-                staffName: staff.name,
-                type: 'vacation',
-                severity: diffYears >= 1.9 ? 'high' : 'medium', // Perto de dobrar (2 anos) é crítico
-                message: diffYears >= 1.9 ? 'Férias prestes a dobrar (risco legal).' : 'Direito a férias adquirido (+1 ano).',
-                date: undefined
-             });
+             // Simulação simples do Período Aquisitivo mais antigo
+             // Pega a data de admissão e soma anos até chegar perto de hoje
+             let vestingStart = new Date(admission);
+             // Avança vestingStart para o ano atual - 1 ou -2 dependendo
+             while (new Date(new Date(vestingStart).setFullYear(vestingStart.getFullYear() + 2)) <= today) {
+                 vestingStart.setFullYear(vestingStart.getFullYear() + 1);
+             }
+             const vestingStartStr = vestingStart.toISOString().split('T')[0];
+
+             // Calcula dias usados neste período específico
+             const usedDays = (staff.vacationHistory || [])
+                .filter(h => h.status !== 'canceled' && h.referencePeriodStart === vestingStartStr)
+                .reduce((acc, curr) => {
+                    const s = new Date(curr.periodStart);
+                    const e = new Date(curr.periodEnd);
+                    const d = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                    return acc + d + (curr.soldDays || 0);
+                }, 0);
+
+             // Se usou menos de 30 dias, está pendente
+             if (usedDays < 30) {
+                 // Calcula prazo limite (vesting + 1 ano + 11 meses para não dobrar)
+                 const deadline = new Date(vestingStart);
+                 deadline.setFullYear(deadline.getFullYear() + 2); // Fim do concessivo
+                 
+                 const daysUntilDeadline = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                 
+                 // Alerta apenas se estiver perto do vencimento (ex: < 60 dias) ou vencido
+                 if (daysUntilDeadline < 60) {
+                     const isCritical = daysUntilDeadline < 30;
+                     alerts.push({
+                        id: `vac-${staff.id}`,
+                        staffId: staff.id,
+                        staffName: staff.name,
+                        type: 'vacation',
+                        severity: isCritical ? 'high' : 'medium', 
+                        message: isCritical 
+                            ? `Férias vencendo em ${daysUntilDeadline} dias! Risco de dobra.` 
+                            : `Planejar férias (${30 - usedDays} dias restantes).`,
+                        date: deadline.toISOString()
+                     });
+                 }
+             }
         }
     });
 

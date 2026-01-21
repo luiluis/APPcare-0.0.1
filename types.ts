@@ -297,6 +297,16 @@ export interface StaffSystemAccess {
   lastLogin?: string | null; // Data ISO do último acesso ou null se nunca acessou
 }
 
+export interface VacationRecord {
+  id: string;
+  periodStart: string; // Início do gozo (ISO)
+  periodEnd: string;   // Fim do gozo (ISO)
+  referencePeriodStart: string; // Início do período aquisitivo (ISO)
+  referencePeriodEnd: string;   // Fim do período aquisitivo (ISO)
+  status: 'scheduled' | 'completed' | 'canceled';
+  soldDays?: number; // Abono pecuniário (venda de dias)
+}
+
 export interface Staff {
   id: string;
   name: string;
@@ -326,6 +336,9 @@ export interface Staff {
     scale: '12x36' | '6x1' | '5x2' | 'outra';
     workShift: 'diurno' | 'noturno';
   };
+
+  // Histórico de Férias
+  vacationHistory?: VacationRecord[];
 
   // Acesso ao Sistema (Novo)
   systemAccess?: StaffSystemAccess;

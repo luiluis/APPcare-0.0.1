@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   Users, Calendar, DollarSign, CheckCircle2, AlertCircle, 
   FileText, Wallet, ChevronLeft, ChevronRight, Calculator, Check,
-  Info, RefreshCw, AlertTriangle
+  Info, RefreshCw, AlertTriangle, Loader2
 } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { usePayrollLogic } from '../hooks/usePayrollLogic';
@@ -17,11 +17,12 @@ import { PayrollDetailModal } from '../components/modals/PayrollDetailModal';
 export const PayrollPage: React.FC = () => {
   const { staff, invoices, setInvoices, staffIncidents, selectedBranchId } = useData();
   const { calculateEstimatedSalary } = usePayrollLogic();
-  // Extraindo updatePayrollInvoice do hook
-  const { generatePayrollInvoice, updatePayrollInvoice } = usePayrollGeneration({ invoices, onUpdateInvoices: setInvoices });
+  // Incluído generatePayrollBatch
+  const { generatePayrollInvoice, generatePayrollBatch, updatePayrollInvoice } = usePayrollGeneration({ invoices, onUpdateInvoices: setInvoices });
   const { registerPayment } = usePaymentProcessing({ invoices, onUpdateInvoices: setInvoices });
 
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [isGenerating, setIsGenerating] = useState(false); // Novo estado de Loading
   const month = selectedDate.getMonth() + 1;
   const year = selectedDate.getFullYear();
 
@@ -56,21 +57,18 @@ export const PayrollPage: React.FC = () => {
       // 2. Calcula estimativa usando a nova lógica granular
       const calculation = calculateEstimatedSalary(employee, staffIncidents, month, year);
 
-      // 3. Verifica se o valor da fatura existente difere do cálculo atual (perfil alterado)
-      // Apenas para faturas pendentes ou atrasadas (não pagas)
+      // 3. Verifica se o valor da fatura existente difere do cálculo atual
       const isOutdated = existingInvoice && 
                          existingInvoice.status !== InvoiceStatus.PAID && 
-                         Math.abs(existingInvoice.totalAmount - calculation.netTotal) > 1; // Margem de 1 centavo
+                         Math.abs(existingInvoice.totalAmount - calculation.netTotal) > 1;
 
       return {
         staff: employee,
         invoice: existingInvoice,
-        calculation: calculation, // Novo objeto detalhado
-        // Se existe fatura, usa o valor dela para exibição (mesmo que esteja outdated, mostramos o real do banco). 
-        // Se não, usa a estimativa.
+        calculation: calculation,
         finalAmount: existingInvoice ? existingInvoice.totalAmount : calculation.netTotal,
         status: existingInvoice ? existingInvoice.status : 'not_generated',
-        isOutdated // Flag para UI
+        isOutdated
       };
     });
   }, [filteredStaff, invoices, staffIncidents, month, year, calculateEstimatedSalary]);
@@ -94,20 +92,33 @@ export const PayrollPage: React.FC = () => {
     setSelectedDate(newDate);
   };
 
-  const handleGenerateBatch = () => {
-    if (!confirm(`Confirmar geração da folha para ${payrollMap.filter(i => i.status === 'not_generated').length} colaboradores?`)) return;
+  const handleGenerateBatch = async () => {
+    const pendingItems = payrollMap.filter(i => i.status === 'not_generated');
+    
+    if (pendingItems.length === 0) return;
 
-    payrollMap.forEach(item => {
-      if (item.status === 'not_generated') {
-        // Gera fatura detalhada passando o objeto calculation completo
-        generatePayrollInvoice(
-          item.staff,
-          item.calculation,
-          new Date(year, month, 5).toISOString().split('T')[0],
-          `Salário ${month.toString().padStart(2, '0')}/${year}`
-        );
-      }
-    });
+    if (!confirm(`Confirmar geração da folha para ${pendingItems.length} colaboradores?`)) return;
+
+    setIsGenerating(true);
+
+    // Simula um pequeno delay para UX e garante que o estado isGenerating renderize
+    setTimeout(() => {
+        const dueDate = new Date(year, month, 5).toISOString().split('T')[0];
+        
+        // Prepara a lista para processamento em lote
+        const batchList = pendingItems.map(item => ({
+            staff: item.staff,
+            calculation: item.calculation
+        }));
+
+        // Chama função otimizada de lote
+        const count = generatePayrollBatch(batchList, dueDate);
+
+        setIsGenerating(false);
+        
+        // Feedback Visual
+        alert(`✅ Folha de Pagamento gerada com sucesso!\n\nForam criados ${count} lançamentos financeiros.`);
+    }, 500);
   };
 
   const handleQuickPay = (invoiceId: string, amount: number) => {
@@ -130,7 +141,7 @@ export const PayrollPage: React.FC = () => {
               item.invoice.id,
               item.staff,
               item.calculation,
-              item.invoice.dueDate // Mantém a data de vencimento original
+              item.invoice.dueDate
           );
       }
   };
@@ -144,7 +155,6 @@ export const PayrollPage: React.FC = () => {
       setDetailModalOpen(true);
   };
 
-  // Helper para somar itens específicos (ex: apenas adicionais que não são salário base)
   const getAdditionsSum = (items: PayrollLineItem[]) => {
       return items
         .filter(i => i.type === 'earning' && i.id !== 'base-salary')
@@ -200,9 +210,11 @@ export const PayrollPage: React.FC = () => {
                     <p className="text-sm text-gray-500 mb-2">{stats.pendingGeneration} pendentes de geração</p>
                     <button 
                         onClick={handleGenerateBatch}
-                        className="w-full py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-md hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+                        disabled={isGenerating}
+                        className={`w-full py-2.5 text-white font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 ${isGenerating ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                     >
-                        <Calculator className="w-4 h-4" /> Gerar Folha
+                        {isGenerating ? <Loader2 className="w-4 h-4 animate-spin"/> : <Calculator className="w-4 h-4" />} 
+                        {isGenerating ? 'Processando...' : 'Gerar Folha'}
                     </button>
                  </>
              ) : (

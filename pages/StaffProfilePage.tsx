@@ -3,10 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { dataService } from '../services/dataService.ts';
 import { Staff, StaffDocument, StaffIncident } from '../types.ts';
-import { Loader2, ArrowLeft, UserCircle2, User, FileText, ClipboardList } from 'lucide-react';
+import { Loader2, ArrowLeft, UserCircle2, User, FileText, ClipboardList, Palmtree } from 'lucide-react';
 import { StaffInfoTab } from '../components/staff/StaffInfoTab.tsx';
 import { StaffDocumentsTab } from '../components/staff/StaffDocumentsTab.tsx';
 import { StaffIncidentsTab } from '../components/staff/StaffIncidentsTab.tsx';
+import { StaffVacationTab } from '../components/staff/StaffVacationTab.tsx';
 
 export const StaffProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -16,29 +17,37 @@ export const StaffProfilePage: React.FC = () => {
   const [staff, setStaff] = useState<Staff | null>(null);
   const [documents, setDocuments] = useState<StaffDocument[]>([]);
   const [incidents, setIncidents] = useState<StaffIncident[]>([]);
-  const [activeTab, setActiveTab] = useState<'info' | 'docs' | 'incidents'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'docs' | 'incidents' | 'vacation'>('info');
+
+  const loadData = async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+          const [s, docs, incs] = await Promise.all([
+              dataService.getStaffById(id),
+              dataService.getStaffDocuments(id),
+              dataService.getStaffIncidents(id)
+          ]);
+          setStaff(s);
+          setDocuments(docs);
+          setIncidents(incs);
+      } catch (error) {
+          console.error(error);
+      } finally {
+          setLoading(false);
+      }
+  };
 
   useEffect(() => {
-    const loadData = async () => {
-        if (!id) return;
-        setLoading(true);
-        try {
-            const [s, docs, incs] = await Promise.all([
-                dataService.getStaffById(id),
-                dataService.getStaffDocuments(id),
-                dataService.getStaffIncidents(id)
-            ]);
-            setStaff(s);
-            setDocuments(docs);
-            setIncidents(incs);
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoading(false);
-        }
-    };
     loadData();
   }, [id]);
+
+  // Handler simples para recarregar incidentes quando uma féria é criada
+  const handleRefreshIncidents = async () => {
+      if (!id) return;
+      const incs = await dataService.getStaffIncidents(id);
+      setIncidents(incs);
+  };
 
   const handleUpdateStaff = (updatedStaff: Staff) => {
       setStaff(updatedStaff);
@@ -72,6 +81,12 @@ export const StaffProfilePage: React.FC = () => {
                         <User className="w-4 h-4" /> Visão Geral
                     </button>
                     <button 
+                      onClick={() => setActiveTab('vacation')}
+                      className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'vacation' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <Palmtree className="w-4 h-4" /> Férias
+                    </button>
+                    <button 
                       onClick={() => setActiveTab('incidents')}
                       className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'incidents' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                     >
@@ -89,6 +104,7 @@ export const StaffProfilePage: React.FC = () => {
 
         <div className="flex-1">
             {activeTab === 'info' && <StaffInfoTab staff={staff} onUpdate={handleUpdateStaff} />}
+            {activeTab === 'vacation' && <StaffVacationTab staff={staff} onUpdateStaff={handleUpdateStaff} onRefreshIncidents={handleRefreshIncidents} />}
             {activeTab === 'incidents' && <StaffIncidentsTab staff={staff} incidents={incidents} onUpdateIncidents={setIncidents} />}
             {activeTab === 'docs' && <StaffDocumentsTab staff={staff} documents={documents} onUpdateDocuments={setDocuments} />}
         </div>

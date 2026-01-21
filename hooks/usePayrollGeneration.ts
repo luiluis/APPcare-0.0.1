@@ -38,7 +38,7 @@ export const usePayrollGeneration = ({ invoices, onUpdateInvoices }: UsePayrollG
   };
 
   /**
-   * Gera uma despesa de folha de pagamento detalhada.
+   * Gera uma despesa de folha de pagamento detalhada (Single).
    */
   const generatePayrollInvoice = (
     staff: Staff, 
@@ -46,26 +46,23 @@ export const usePayrollGeneration = ({ invoices, onUpdateInvoices }: UsePayrollG
     dueDate: string, 
     descriptionHeader: string
   ) => {
-    // Criação do ID único
     const newInvoiceId = `inv-pay-${staff.id}-${Date.now()}`;
     const today = new Date();
 
-    // Gera os itens baseados no cálculo (Base, Insalubridade, INSS, VT, etc)
     const invoiceItems = mapCalculationToInvoiceItems(newInvoiceId, calculation, dueDate);
 
     const newInvoice: Invoice = {
       id: newInvoiceId,
       type: 'expense',
       branchId: staff.branchId,
-      staffId: staff.id, // Vínculo com RH
-      month: today.getMonth() + 1, // Competência
+      staffId: staff.id,
+      month: today.getMonth() + 1,
       year: today.getFullYear(),
       status: InvoiceStatus.PENDING,
       dueDate: dueDate,
-      // O total da fatura é o Líquido (soma dos positivos - soma dos negativos)
       totalAmount: calculation.netTotal, 
       supplier: staff.name, 
-      items: invoiceItems, // Itens detalhados para histórico
+      items: invoiceItems,
       payments: []
     };
 
@@ -73,8 +70,44 @@ export const usePayrollGeneration = ({ invoices, onUpdateInvoices }: UsePayrollG
   };
 
   /**
+   * Gera múltiplas folhas de pagamento de uma vez (Batch).
+   * Resolve o problema de race condition do state em loops.
+   */
+  const generatePayrollBatch = (
+    list: { staff: Staff; calculation: PayrollCalculationResult }[],
+    dueDate: string
+  ) => {
+    const today = new Date();
+    const newInvoices: Invoice[] = [];
+
+    list.forEach(({ staff, calculation }) => {
+        const newInvoiceId = `inv-pay-${staff.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        
+        const invoiceItems = mapCalculationToInvoiceItems(newInvoiceId, calculation, dueDate);
+
+        newInvoices.push({
+            id: newInvoiceId,
+            type: 'expense',
+            branchId: staff.branchId,
+            staffId: staff.id,
+            month: today.getMonth() + 1,
+            year: today.getFullYear(),
+            status: InvoiceStatus.PENDING,
+            dueDate: dueDate,
+            totalAmount: calculation.netTotal,
+            supplier: staff.name,
+            items: invoiceItems,
+            payments: []
+        });
+    });
+
+    // Atualiza o estado uma única vez com todas as novas faturas
+    onUpdateInvoices([...invoices, ...newInvoices]);
+    return newInvoices.length;
+  };
+
+  /**
    * Recalcula uma fatura de folha de pagamento existente.
-   * Atualiza o valor total E recria os itens com base no novo cálculo.
    */
   const updatePayrollInvoice = (
     invoiceId: string,
@@ -85,20 +118,18 @@ export const usePayrollGeneration = ({ invoices, onUpdateInvoices }: UsePayrollG
     const updatedInvoices = invoices.map(inv => {
       if (inv.id !== invoiceId) return inv;
 
-      // Proteção: Não alterar faturas já pagas
       if (inv.status === InvoiceStatus.PAID || (inv.paidAmount && inv.paidAmount > 0)) {
         console.warn(`[Payroll] Tentativa de recalcular fatura paga/parcial ignorada: ${inv.id}`);
         return inv;
       }
 
-      // Recria os itens com o novo cálculo
       const newItems = mapCalculationToInvoiceItems(inv.id, calculation, dueDate);
 
       return {
         ...inv,
         dueDate: dueDate,
         totalAmount: calculation.netTotal,
-        items: newItems // Substitui os itens antigos pelos novos
+        items: newItems
       };
     });
 
@@ -107,6 +138,7 @@ export const usePayrollGeneration = ({ invoices, onUpdateInvoices }: UsePayrollG
 
   return {
     generatePayrollInvoice,
+    generatePayrollBatch,
     updatePayrollInvoice
   };
 };
