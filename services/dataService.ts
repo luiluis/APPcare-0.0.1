@@ -1,6 +1,7 @@
 
 import { 
   MOCK_RESIDENTS, 
+  MOCK_FINANCIAL_PROFILES,
   MOCK_PRESCRIPTIONS, 
   MOCK_STOCK, 
   MOCK_EVOLUTIONS, 
@@ -12,17 +13,17 @@ import {
   BRANCHES
 } from '../constants.ts';
 import { 
-  Resident, Prescription, StockItem, Evolution, 
+  Resident, ResidentFinancialProfile, Prescription, StockItem, Evolution, 
   ResidentDocument, Invoice, Staff, Branch, DocumentCategory,
-  MedicationLog, IncidentReport, StaffDocument, StaffIncident, StaffDocumentCategory, HRAlert
+  MedicationLog, IncidentReport, StaffDocument, StaffIncident, HRAlert,
+  StaffDocumentCategory, TaxTable, FinancialMovement
 } from '../types.ts';
 import { storageService } from './storageService.ts';
 import { sanitizeInput } from '../lib/utils.ts';
 
-/**
- * ESTADO LOCAL (Simulando tabelas do Banco de Dados)
- */
+// --- MOCK DB TABLES (State Local) ---
 let db_residents = [...MOCK_RESIDENTS];
+let db_financial_profiles = [...MOCK_FINANCIAL_PROFILES]; 
 let db_prescriptions = [...MOCK_PRESCRIPTIONS];
 let db_stock = [...MOCK_STOCK];
 let db_evolutions = [...MOCK_EVOLUTIONS];
@@ -34,6 +35,37 @@ let db_incidents: IncidentReport[] = [];
 let db_staff = [...MOCK_STAFF];
 let db_staff_documents = [...MOCK_STAFF_DOCUMENTS];
 let db_staff_incidents = [...MOCK_STAFF_INCIDENTS];
+// Financeiro & Fiscal
+let db_financial_movements: FinancialMovement[] = [];
+
+// Tabelas Fiscais Centralizadas
+const db_tax_tables: Record<number, { inss: TaxTable, irrf: TaxTable }> = {
+    2024: {
+        inss: {
+            year: 2024,
+            minWage: 141200, // R$ 1.412,00
+            ceiling: 778602, // R$ 7.786,02
+            brackets: [
+                { limit: 141200, rate: 0.075 },
+                { limit: 266668, rate: 0.09 },
+                { limit: 400003, rate: 0.12 },
+                { limit: 778602, rate: 0.14 },
+            ]
+        },
+        irrf: {
+            year: 2024,
+            minWage: 141200,
+            ceiling: 0,
+            brackets: [
+                { limit: 225920, rate: 0, deduction: 0 },
+                { limit: 282665, rate: 0.075, deduction: 16944 },
+                { limit: 375105, rate: 0.15, deduction: 38144 },
+                { limit: 466468, rate: 0.225, deduction: 66277 },
+                { limit: 999999999, rate: 0.275, deduction: 89600 }
+            ]
+        }
+    }
+};
 
 const simulateNetwork = async <T>(data: T, errorChance = 0.05): Promise<T> => {
   return new Promise((resolve, reject) => {
@@ -50,11 +82,32 @@ const simulateNetwork = async <T>(data: T, errorChance = 0.05): Promise<T> => {
 export const dataService = {
   // --- QUERIES RESIDENTS/OPERATIONAL ---
   getResidents: async () => simulateNetwork(db_residents, 0.02),
+  
   getResidentById: async (id: string) => {
     const res = db_residents.find(r => r.id === id);
     if (!res) throw new Error("Residente não encontrado.");
     return simulateNetwork(res, 0);
   },
+
+  getFinancialProfileByResidentId: async (residentId: string) => {
+    const profile = db_financial_profiles.find(fp => fp.residentId === residentId);
+    const fallbackProfile: ResidentFinancialProfile = { id: `fp-new-${Date.now()}`, residentId };
+    return simulateNetwork(profile || fallbackProfile, 0);
+  },
+
+  updateFinancialProfile: async (profile: ResidentFinancialProfile): Promise<ResidentFinancialProfile> => {
+    const index = db_financial_profiles.findIndex(fp => fp.id === profile.id || fp.residentId === profile.residentId);
+    
+    if (index >= 0) {
+        db_financial_profiles[index] = profile;
+        return simulateNetwork(profile, 0);
+    } else {
+        const newProfile = { ...profile, id: profile.id || `fp-${Date.now()}` };
+        db_financial_profiles.push(newProfile);
+        return simulateNetwork(newProfile, 0);
+    }
+  },
+
   getPrescriptionsByResident: async (resId: string) => simulateNetwork(db_prescriptions.filter(p => p.residentId === resId), 0),
   getStockByResident: async (resId: string) => simulateNetwork(db_stock.filter(s => s.residentId === resId), 0),
   getEvolutionsByResident: async (resId: string) => simulateNetwork(db_evolutions.filter(e => e.residentId === resId), 0),
@@ -65,7 +118,7 @@ export const dataService = {
   getIncidents: async () => simulateNetwork(db_incidents, 0),
   getIncidentsByResident: async (resId: string) => simulateNetwork(db_incidents.filter(i => i.residentId === resId), 0),
 
-  // --- QUERIES STAFF (RH) ---
+  // --- QUERIES STAFF (RH) & FISCAL ---
   getStaff: async () => simulateNetwork(db_staff, 0),
   
   getStaffById: async (id: string) => {
@@ -75,14 +128,18 @@ export const dataService = {
   },
 
   getStaffDocuments: async (staffId: string) => simulateNetwork(db_staff_documents.filter(d => d.staffId === staffId), 0),
-  
   getStaffIncidents: async (staffId: string) => simulateNetwork(db_staff_incidents.filter(i => i.staffId === staffId), 0),
+
+  getTaxTables: async (year: number) => {
+      // Fallback para 2024 se o ano solicitado não existir
+      const tables = db_tax_tables[year] || db_tax_tables[2024];
+      return simulateNetwork(tables, 0);
+  },
 
   getHRAlerts: async (): Promise<HRAlert[]> => {
     const alerts: HRAlert[] = [];
     const today = new Date();
     
-    // 1. Verificar Colaboradores
     db_staff.forEach(staff => {
         if (!staff.active || !staff.contractInfo?.admissionDate) return;
 
@@ -91,8 +148,6 @@ export const dataService = {
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         const diffYears = diffDays / 365;
 
-        // A. Contrato de Experiência (45 dias ou 90 dias)
-        // Alerta se faltar 5 dias ou menos para completar 45 ou 90
         const daysTo45 = 45 - diffDays;
         const daysTo90 = 90 - diffDays;
 
@@ -118,19 +173,13 @@ export const dataService = {
             });
         }
 
-        // B. Férias Vencidas (Lógica Inteligente)
-        // Se tem mais de 1 ano de casa, verifica se tirou férias
         if (diffYears >= 1.0) {
-             // Simulação simples do Período Aquisitivo mais antigo
-             // Pega a data de admissão e soma anos até chegar perto de hoje
              let vestingStart = new Date(admission);
-             // Avança vestingStart para o ano atual - 1 ou -2 dependendo
              while (new Date(new Date(vestingStart).setFullYear(vestingStart.getFullYear() + 2)) <= today) {
                  vestingStart.setFullYear(vestingStart.getFullYear() + 1);
              }
              const vestingStartStr = vestingStart.toISOString().split('T')[0];
 
-             // Calcula dias usados neste período específico
              const usedDays = (staff.vacationHistory || [])
                 .filter(h => h.status !== 'canceled' && h.referencePeriodStart === vestingStartStr)
                 .reduce((acc, curr) => {
@@ -140,15 +189,12 @@ export const dataService = {
                     return acc + d + (curr.soldDays || 0);
                 }, 0);
 
-             // Se usou menos de 30 dias, está pendente
              if (usedDays < 30) {
-                 // Calcula prazo limite (vesting + 1 ano + 11 meses para não dobrar)
                  const deadline = new Date(vestingStart);
-                 deadline.setFullYear(deadline.getFullYear() + 2); // Fim do concessivo
+                 deadline.setFullYear(deadline.getFullYear() + 2); 
                  
                  const daysUntilDeadline = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                  
-                 // Alerta apenas se estiver perto do vencimento (ex: < 60 dias) ou vencido
                  if (daysUntilDeadline < 60) {
                      const isCritical = daysUntilDeadline < 30;
                      alerts.push({
@@ -167,16 +213,13 @@ export const dataService = {
         }
     });
 
-    // 2. Verificar Documentos Vencidos
     db_staff_documents.forEach(doc => {
         if (!doc.expirationDate) return;
-        
         const staff = db_staff.find(s => s.id === doc.staffId);
         if (!staff || !staff.active) return;
 
         const expDate = new Date(doc.expirationDate);
         const isExpired = expDate < today;
-        // Expira nos próximos 30 dias
         const isExpiringSoon = expDate > today && (expDate.getTime() - today.getTime()) / (1000 * 3600 * 24) <= 30;
 
         if (isExpired || isExpiringSoon) {
@@ -237,7 +280,22 @@ export const dataService = {
             quantity: item.quantity - 1,
             status: (item.quantity - 1) <= item.minThreshold ? 'low' : 'ok'
           };
-          console.log(`[DataService] Baixa automática no estoque: ${item.name} para residente ${prescription.residentId}. Nova qtd: ${db_stock[stockItemIndex].quantity}`);
+          
+          // 5. REGISTRO FINANCEIRO (Novo requisito)
+          const cost = item.unitPrice || 0; // Se não tiver preço, assume 0
+          if (cost > 0) {
+              const movement: FinancialMovement = {
+                  id: `fin-mov-${Date.now()}`,
+                  type: 'stock_usage',
+                  relatedId: newLog.id,
+                  amount: cost, // Custo em centavos
+                  description: `Consumo: ${item.name}`,
+                  date: new Date().toISOString(),
+                  branchId: db_residents.find(r => r.id === item.residentId)?.branchId || 'unknown'
+              };
+              db_financial_movements.push(movement);
+              console.log(`[Financeiro] Custo registrado: R$ ${(cost/100).toFixed(2)} para ${item.name}`);
+          }
         }
       }
     }
@@ -283,7 +341,6 @@ export const dataService = {
     const index = db_prescriptions.findIndex(p => p.id === id);
     if (index === -1) throw new Error("Não encontrada.");
     
-    // Sanitize if updating text fields
     if (updates.medication) updates.medication = sanitizeInput(updates.medication);
     if (updates.instructions) updates.instructions = sanitizeInput(updates.instructions);
 
@@ -300,9 +357,6 @@ export const dataService = {
   // --- MUTATIONS STAFF (RH) ---
 
   addStaff: async (staffData: Partial<Staff>): Promise<Staff> => {
-    // Definindo estrutura padrão segura com tipagem
-    // Sanitização aplicada nos campos de texto livre
-    
     const personalInfo = {
         cpf: sanitizeInput(staffData.personalInfo?.cpf || ''),
         rg: sanitizeInput(staffData.personalInfo?.rg || ''),
@@ -332,7 +386,6 @@ export const dataService = {
         }
     };
 
-    // Montagem do objeto final com tipagem estrita
     const newStaff: Staff = {
       id: `stf-${Date.now()}`,
       created_at: new Date().toISOString(),
@@ -340,13 +393,9 @@ export const dataService = {
       name: sanitizeInput(staffData.name || 'Novo Colaborador'),
       role: sanitizeInput(staffData.role || 'Cargo não definido'),
       branchId: staffData.branchId || BRANCHES[0].id,
-      
-      // Objetos aninhados garantidos
       personalInfo: personalInfo,
       contractInfo: contractInfo,
       financialInfo: financialInfo,
-      
-      // Opcionais
       systemAccess: staffData.systemAccess,
       benefits: staffData.benefits,
       dependents: staffData.dependents,
@@ -369,7 +418,6 @@ export const dataService = {
   },
 
   addStaffDocument: async (staffId: string, title: string, category: StaffDocumentCategory, file: File, expirationDate?: string, customPath?: string): Promise<StaffDocument> => {
-    // Passa o customPath para o serviço de storage
     const fileUrl = await storageService.uploadFile(file, 'staff-documents', customPath);
     
     const newDoc: StaffDocument = {

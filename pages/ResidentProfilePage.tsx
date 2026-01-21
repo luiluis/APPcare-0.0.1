@@ -3,19 +3,20 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ResidentProfile } from '../components/residents/ResidentProfile.tsx';
 import { dataService } from '../services/dataService.ts';
-import { Resident, Prescription, StockItem, Evolution, ResidentDocument, Invoice } from '../types.ts';
+import { Resident, ResidentFinancialProfile, Prescription, StockItem, Evolution, ResidentDocument, Invoice } from '../types.ts';
 import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useData } from '../contexts/DataContext.tsx';
 
 export const ResidentProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { logAction } = useData(); // Acesso ao contexto global para logs
+  const { logAction } = useData();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   const [resident, setResident] = useState<Resident | null>(null);
+  const [financialProfile, setFinancialProfile] = useState<ResidentFinancialProfile | null>(null);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [evolutions, setEvolutions] = useState<Evolution[]>([]);
@@ -29,9 +30,10 @@ export const ResidentProfilePage: React.FC = () => {
       setError(null);
       
       try {
-        // Busca paralela de todos os dados relacionados ao id
-        const [res, prescs, stock, evs, docs, allInvoices] = await Promise.all([
+        // Busca paralela segregada
+        const [res, finProfile, prescs, stock, evs, docs, allInvoices] = await Promise.all([
           dataService.getResidentById(id),
+          dataService.getFinancialProfileByResidentId(id), // Busca segregada
           dataService.getPrescriptionsByResident(id),
           dataService.getStockByResident(id),
           dataService.getEvolutionsByResident(id),
@@ -40,6 +42,7 @@ export const ResidentProfilePage: React.FC = () => {
         ]);
 
         setResident(res);
+        setFinancialProfile(finProfile);
         setPrescriptions(prescs);
         setStockItems(stock);
         setEvolutions(evs);
@@ -55,6 +58,14 @@ export const ResidentProfilePage: React.FC = () => {
 
     loadResidentFullData();
   }, [id]);
+
+  // Handler para atualizar apenas o perfil financeiro
+  const handleUpdateFinancialProfile = async (updatedProfile: ResidentFinancialProfile) => {
+      // Otimista
+      setFinancialProfile(updatedProfile);
+      // Persistência
+      await dataService.updateFinancialProfile(updatedProfile);
+  };
 
   if (loading) {
     return (
@@ -88,6 +99,7 @@ export const ResidentProfilePage: React.FC = () => {
   return (
     <ResidentProfile 
       resident={resident} 
+      financialProfile={financialProfile!} // Passa o perfil financeiro separado
       prescriptions={prescriptions}
       stock={stockItems}
       evolutions={evolutions}
@@ -95,13 +107,12 @@ export const ResidentProfilePage: React.FC = () => {
       invoices={invoices}
       onBack={() => navigate('/residentes')} 
       onUpdateResident={(updated) => setResident(updated)}
+      onUpdateFinancialProfile={handleUpdateFinancialProfile} // Novo handler específico
       onUpdatePrescriptions={setPrescriptions}
       onUpdateStock={setStockItems}
       onUpdateDocuments={setDocuments}
-      // Fix: Use 'logAction' from destructuring instead of undefined 'onLogAction'
       onLogAction={logAction}
       onAddEvolution={(resId, content, type) => {
-          // Lógica local para atualização imediata da UI de evoluções
           const newEv: Evolution = {
               id: `ev-${Date.now()}`,
               residentId: resId,

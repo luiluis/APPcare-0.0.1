@@ -1,32 +1,33 @@
 
 import React, { useState, useMemo } from 'react';
-import { Resident, Invoice, Contact, InvoiceStatus, FeeConfig, ContractRecord } from '../../../types';
+import { Resident, Invoice, Contact, InvoiceStatus, FeeConfig, ContractRecord, ResidentFinancialProfile } from '../../../types';
 import { User, Phone, Mail, CreditCard, Edit2, Save, Receipt, CheckCircle2, AlertCircle, X, Percent, Banknote, Plus, Calendar, PieChart, Download, History, ArrowRight, TrendingUp } from 'lucide-react';
-import { formatDateBr, formatCurrency } from '../../../lib/utils';
+import { formatDateBr, formatCurrency, getLocalISOString } from '../../../lib/utils';
 import { generateInvoiceReceipt } from '../../../lib/pdfService';
 
 interface FinancialTabProps {
-  resident: Resident;
+  resident: Resident; // Mantido apenas para dados de contato (MedicalRecord)
+  financialProfile: ResidentFinancialProfile; // Novo objeto de contexto financeiro
   invoices: Invoice[];
   onUpdateResident: (updated: Resident) => void;
+  onUpdateFinancialProfile: (updated: ResidentFinancialProfile) => void;
   onUpdateFee?: (residentId: string, newFeeConfig: FeeConfig, updatePendingInvoices: boolean) => void;
 }
 
-export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, onUpdateResident, onUpdateFee }) => {
+export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, financialProfile, invoices, onUpdateResident, onUpdateFinancialProfile, onUpdateFee }) => {
   const [isEditingContact, setIsEditingContact] = useState(false);
   const [isReadjustModalOpen, setIsReadjustModalOpen] = useState(false);
   const [updatePending, setUpdatePending] = useState(true); 
   
-  // --- CONTACT LOGIC ---
+  // --- CONTACT LOGIC (Mantido no Resident) ---
   const responsibleContactIndex = resident.medicalRecord?.contacts.findIndex(c => c.isFinancialResponsible) ?? -1;
   const currentContact = responsibleContactIndex >= 0 ? resident.medicalRecord?.contacts[responsibleContactIndex] : {
       name: '', relation: 'Responsável', phone: '', email: '', cpf: '', address: '', isFinancialResponsible: true
   };
   const [contactForm, setContactForm] = useState<Contact>(currentContact!);
 
-  // --- FEE & CONTRACT LOGIC ---
-  // Se existir feeConfig mas não histórico, criamos o primeiro registro de histórico virtualmente
-  const currentFeeConfig = resident.feeConfig || {
+  // --- FEE & CONTRACT LOGIC (Migrado para FinancialProfile) ---
+  const currentFeeConfig = financialProfile.feeConfig || {
       baseValue: 0,
       careLevelAdjustment: 0,
       fixedExtras: 0,
@@ -36,10 +37,8 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
   };
 
   const contractHistory = useMemo(() => {
-      // Se já tiver histórico, usa. Se não, cria o inicial baseado no feeConfig atual
-      if (resident.contractHistory && resident.contractHistory.length > 0) {
-          // Ordena do mais recente para o mais antigo
-          return [...resident.contractHistory].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+      if (financialProfile.contractHistory && financialProfile.contractHistory.length > 0) {
+          return [...financialProfile.contractHistory].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
       }
       return [{
           id: 'initial',
@@ -51,14 +50,14 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
           notes: 'Contrato Inicial',
           readjustmentIndex: 'Admissão'
       } as ContractRecord];
-  }, [resident]);
+  }, [financialProfile, resident.admissionDate]); // resident.admissionDate usado apenas como fallback visual
 
-  const activeContract = contractHistory[0]; // O mais recente é o vigente
+  const activeContract = contractHistory[0];
 
   // Estado do Modal de Reajuste
   const [readjustForm, setReadjustForm] = useState<ContractRecord>({
       id: '',
-      startDate: new Date().toISOString().split('T')[0],
+      startDate: getLocalISOString(), // Safe date
       baseValue: activeContract.baseValue,
       careLevelAdjustment: activeContract.careLevelAdjustment,
       fixedExtras: activeContract.fixedExtras,
@@ -99,7 +98,7 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
   const openReadjustModal = () => {
       setReadjustForm({
           id: `ctr-${Date.now()}`,
-          startDate: new Date().toISOString().split('T')[0],
+          startDate: getLocalISOString(), // Safe date
           baseValue: activeContract.baseValue,
           careLevelAdjustment: activeContract.careLevelAdjustment,
           fixedExtras: activeContract.fixedExtras,
@@ -111,7 +110,7 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
   };
 
   const confirmReadjustment = () => {
-      // 1. Encerra o contrato anterior (define endDate como ontem em relação ao novo start)
+      // 1. Encerra o contrato anterior
       const newStartDate = new Date(readjustForm.startDate);
       const prevEndDate = new Date(newStartDate);
       prevEndDate.setDate(prevEndDate.getDate() - 1);
@@ -126,35 +125,27 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
       // 2. Adiciona o novo contrato
       updatedHistory.push(readjustForm);
 
-      // 3. Atualiza o snapshot feeConfig para refletir o contrato vigente (performance)
+      // 3. Atualiza o feeConfig para refletir o contrato vigente
       const newFeeConfig: FeeConfig = {
           baseValue: readjustForm.baseValue,
           careLevelAdjustment: readjustForm.careLevelAdjustment,
           fixedExtras: readjustForm.fixedExtras,
           discount: readjustForm.discount,
           notes: readjustForm.notes || '',
-          paymentDay: currentFeeConfig.paymentDay // Mantém o dia de vencimento
+          paymentDay: currentFeeConfig.paymentDay
       };
 
-      // 4. Salva tudo
+      // 4. Salva usando a prop de atualização do perfil financeiro
       if (onUpdateFee) {
-          // Se tiver handler específico (que atualiza faturas pendentes), usa
           onUpdateFee(resident.id, newFeeConfig, updatePending);
-          // E atualiza o histórico localmente no residente
-          onUpdateResident({
-              ...resident,
-              contractHistory: updatedHistory,
-              feeConfig: newFeeConfig,
-              benefitValue: calculateTotal(newFeeConfig)
-          });
-      } else {
-          onUpdateResident({
-              ...resident,
-              contractHistory: updatedHistory,
-              feeConfig: newFeeConfig,
-              benefitValue: calculateTotal(newFeeConfig)
-          });
       }
+      
+      onUpdateFinancialProfile({
+          ...financialProfile,
+          contractHistory: updatedHistory,
+          feeConfig: newFeeConfig,
+          benefitValue: calculateTotal(newFeeConfig)
+      });
 
       setIsReadjustModalOpen(false);
   };
@@ -162,7 +153,6 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
   const inputStyle = "w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm transition-all";
   const labelStyle = "text-xs font-bold text-gray-400 uppercase mb-1 block";
 
-  // Variação Percentual (Novo vs Anterior)
   const percentDiff = useMemo(() => {
       const oldTotal = calculateTotal(activeContract);
       const newTotal = calculateTotal(readjustForm);
@@ -202,7 +192,7 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
                             <p className="text-gray-900 font-medium flex items-center gap-2 text-sm"><User className="w-4 h-4 text-gray-400" /> {contactForm.name || '-'}</p>
                         )}
                     </div>
-                    {/* ... (Outros campos de contato mantidos iguais) ... */}
+                    {/* ... (Outros campos de contato) ... */}
                     <div>
                         <label className={labelStyle}>Parentesco</label>
                          {isEditingContact ? (
@@ -232,9 +222,8 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
                 </div>
             </div>
 
-            {/* --- CONTRATO VIGENTE --- */}
+            {/* --- CONTRATO VIGENTE (Lê do FinancialProfile) --- */}
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 shadow-sm relative overflow-hidden group">
-                {/* Background Decorativo */}
                 <Banknote className="absolute -right-6 -bottom-6 w-32 h-32 text-blue-100 rotate-12 group-hover:rotate-6 transition-transform pointer-events-none" />
                 
                 <div className="relative z-10">
@@ -291,7 +280,7 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
         {/* Coluna 2 e 3: Histórico e Faturas */}
         <div className="lg:col-span-2 space-y-6">
              
-             {/* TIMELINE DE HISTÓRICO DE CONTRATOS */}
+             {/* TIMELINE */}
              {contractHistory.length > 1 && (
                  <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
                      <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
@@ -318,7 +307,7 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
                  </div>
              )}
 
-             {/* TABELA DE FATURAS */}
+             {/* TABELA DE FATURAS (Mantida Igual) */}
              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                     <h3 className="font-bold text-gray-900 flex items-center gap-2">
@@ -395,7 +384,7 @@ export const FinancialTab: React.FC<FinancialTabProps> = ({ resident, invoices, 
              </div>
         </div>
 
-        {/* --- MODAL DE REAJUSTE --- */}
+        {/* Modal de Reajuste (Mantido, mas agora opera sobre os estados locais e chama onUpdateFinancialProfile) */}
         {isReadjustModalOpen && (
             <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
                 <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">

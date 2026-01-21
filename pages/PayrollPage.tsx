@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Users, Calendar, DollarSign, CheckCircle2, AlertCircle, 
   FileText, Wallet, ChevronLeft, ChevronRight, Calculator, Check,
@@ -10,19 +10,21 @@ import { usePayrollLogic } from '../hooks/usePayrollLogic';
 import { usePayrollGeneration } from '../hooks/usePayrollGeneration';
 import { usePaymentProcessing } from '../hooks/usePaymentProcessing';
 import { formatCurrency, formatDateBr } from '../lib/utils';
-import { InvoiceStatus, InvoiceCategory, PayrollLineItem, PayrollCalculationResult, Invoice } from '../types';
+import { InvoiceStatus, InvoiceCategory, PayrollLineItem, PayrollCalculationResult, Invoice, TaxTable } from '../types';
 import { StatCard } from '../components/StatCard';
 import { PayrollDetailModal } from '../components/modals/PayrollDetailModal';
+import { dataService } from '../services/dataService';
 
 export const PayrollPage: React.FC = () => {
   const { staff, invoices, setInvoices, staffIncidents, selectedBranchId } = useData();
   const { calculateEstimatedSalary } = usePayrollLogic();
-  // Incluído generatePayrollBatch
   const { generatePayrollInvoice, generatePayrollBatch, updatePayrollInvoice } = usePayrollGeneration({ invoices, onUpdateInvoices: setInvoices });
   const { registerPayment } = usePaymentProcessing({ invoices, onUpdateInvoices: setInvoices });
 
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [isGenerating, setIsGenerating] = useState(false); // Novo estado de Loading
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [taxTables, setTaxTables] = useState<{ inss: TaxTable, irrf: TaxTable } | null>(null);
+  
   const month = selectedDate.getMonth() + 1;
   const year = selectedDate.getFullYear();
 
@@ -35,6 +37,19 @@ export const PayrollPage: React.FC = () => {
       invoice?: Invoice | null;
   } | null>(null);
 
+  // --- CARREGA TABELAS FISCAIS ---
+  useEffect(() => {
+      const loadTables = async () => {
+          try {
+              const tables = await dataService.getTaxTables(year);
+              setTaxTables(tables);
+          } catch (e) {
+              console.error("Failed to load tax tables", e);
+          }
+      };
+      loadTables();
+  }, [year]);
+
   // --- FILTRO DE FUNCIONÁRIOS (Por Unidade) ---
   const filteredStaff = useMemo(() => {
     return staff.filter(s => 
@@ -45,6 +60,8 @@ export const PayrollPage: React.FC = () => {
 
   // --- MAPA MESTRE DA FOLHA ---
   const payrollMap = useMemo(() => {
+    if (!taxTables) return [];
+
     return filteredStaff.map(employee => {
       // 1. Procura se já existe fatura de salário
       const existingInvoice = invoices.find(inv => 
@@ -55,8 +72,15 @@ export const PayrollPage: React.FC = () => {
         inv.year === year
       );
 
-      // 2. Calcula estimativa usando a nova lógica granular
-      const calculation = calculateEstimatedSalary(employee, staffIncidents, month, year);
+      // 2. Calcula estimativa usando tabelas dinâmicas
+      const calculation = calculateEstimatedSalary(
+          employee, 
+          staffIncidents, 
+          month, 
+          year,
+          taxTables.inss,
+          taxTables.irrf
+      );
 
       // 3. Verifica se o valor da fatura existente difere do cálculo atual
       const isOutdated = existingInvoice && 
@@ -72,7 +96,7 @@ export const PayrollPage: React.FC = () => {
         isOutdated
       };
     });
-  }, [filteredStaff, invoices, staffIncidents, month, year, calculateEstimatedSalary]);
+  }, [filteredStaff, invoices, staffIncidents, month, year, calculateEstimatedSalary, taxTables]);
 
   // --- TOTALIZADORES ---
   const stats = useMemo(() => {
@@ -102,22 +126,18 @@ export const PayrollPage: React.FC = () => {
 
     setIsGenerating(true);
 
-    // Simula um pequeno delay para UX e garante que o estado isGenerating renderize
     setTimeout(() => {
         const dueDate = new Date(year, month, 5).toISOString().split('T')[0];
         
-        // Prepara a lista para processamento em lote
         const batchList = pendingItems.map(item => ({
             staff: item.staff,
             calculation: item.calculation
         }));
 
-        // Chama função otimizada de lote
         const count = generatePayrollBatch(batchList, dueDate);
 
         setIsGenerating(false);
         
-        // Feedback Visual
         alert(`✅ Folha de Pagamento gerada com sucesso!\n\nForam criados ${count} lançamentos financeiros.`);
     }, 500);
   };
@@ -162,6 +182,10 @@ export const PayrollPage: React.FC = () => {
         .filter(i => i.type === 'earning' && i.id !== 'base-salary')
         .reduce((acc, i) => acc + i.amount, 0);
   };
+
+  if (!taxTables) {
+      return <div className="flex justify-center items-center h-[50vh]"><Loader2 className="w-8 h-8 animate-spin text-blue-600"/></div>;
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 pb-20">

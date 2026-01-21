@@ -1,12 +1,12 @@
 
-import { Branch, BranchType, Resident, FinancialRecord, Staff, Invoice, InvoiceItem, Prescription, StockItem, Evolution, ResidentDocument, StaffDocument, StaffIncident } from './types';
+import { Branch, BranchType, Resident, ResidentFinancialProfile, Staff, Invoice, InvoiceItem, Prescription, StockItem, Evolution, ResidentDocument, StaffDocument, StaffIncident } from './types';
 
 export const BRANCHES: Branch[] = [
   { id: 'b1', name: 'Casa Repouso Matriz (Centro)', type: BranchType.MATRIZ },
   { id: 'b2', name: 'Unidade Jardim (Filial)', type: BranchType.FILIAL },
 ];
 
-// Valores monetários multiplicados por 100 para converter em CENTAVOS
+// 1. RESIDENTES (DADOS CLÍNICOS E IDENTIDADE)
 export const MOCK_RESIDENTS: Resident[] = [
   {
     id: 'res-1',
@@ -18,15 +18,6 @@ export const MOCK_RESIDENTS: Resident[] = [
     status: 'Ativo',
     careLevel: 3,
     admissionDate: '2022-10-15', 
-    benefitValue: 550000, // R$ 5.500,00
-    feeConfig: {
-      baseValue: 400000, // R$ 4.000,00
-      careLevelAdjustment: 150000, // R$ 1.500,00
-      fixedExtras: 0,
-      discount: 0,
-      notes: 'Valor ajustado conforme IPCA anual em Outubro.',
-      paymentDay: 5
-    },
     medicalRecord: {
       bloodType: 'O+',
       allergies: ['DIPIRONA', 'PENICILINA'],
@@ -53,15 +44,6 @@ export const MOCK_RESIDENTS: Resident[] = [
     status: 'Ativo',
     careLevel: 1,
     admissionDate: '2023-01-10',
-    benefitValue: 350000,
-    feeConfig: {
-      baseValue: 350000,
-      careLevelAdjustment: 0, 
-      fixedExtras: 10000, // R$ 100,00
-      discount: 0,
-      notes: 'Pagamento via boleto.',
-      paymentDay: 10
-    },
     medicalRecord: {
         bloodType: 'A+',
         allergies: [],
@@ -86,15 +68,6 @@ export const MOCK_RESIDENTS: Resident[] = [
     status: 'Hospitalizado',
     careLevel: 3,
     admissionDate: '2023-05-20',
-    benefitValue: 600000,
-    feeConfig: {
-      baseValue: 400000,
-      careLevelAdjustment: 200000, 
-      fixedExtras: 0,
-      discount: 0,
-      notes: 'Adicional de Enfermagem 24h incluso.',
-      paymentDay: 5
-    },
     medicalRecord: {
         bloodType: 'B-',
         allergies: ['SULFA'],
@@ -112,16 +85,60 @@ export const MOCK_RESIDENTS: Resident[] = [
   }
 ];
 
+// 2. PERFIS FINANCEIROS (DADOS CONTRATUAIS SEGREGADOS)
+export const MOCK_FINANCIAL_PROFILES: ResidentFinancialProfile[] = [
+  {
+    id: 'fin-res-1',
+    residentId: 'res-1',
+    benefitValue: 550000,
+    feeConfig: {
+      baseValue: 400000,
+      careLevelAdjustment: 150000,
+      fixedExtras: 0,
+      discount: 0,
+      notes: 'Valor ajustado conforme IPCA anual em Outubro.',
+      paymentDay: 5
+    }
+  },
+  {
+    id: 'fin-res-2',
+    residentId: 'res-2',
+    benefitValue: 350000,
+    feeConfig: {
+      baseValue: 350000,
+      careLevelAdjustment: 0, 
+      fixedExtras: 10000,
+      discount: 0,
+      notes: 'Pagamento via boleto.',
+      paymentDay: 10
+    }
+  },
+  {
+    id: 'fin-res-3',
+    residentId: 'res-3',
+    benefitValue: 600000,
+    feeConfig: {
+      baseValue: 400000,
+      careLevelAdjustment: 200000, 
+      fixedExtras: 0,
+      discount: 0,
+      notes: 'Adicional de Enfermagem 24h incluso.',
+      paymentDay: 5
+    }
+  }
+];
+
 export const MOCK_PRESCRIPTIONS: Prescription[] = [
     { id: 'p1', residentId: 'res-1', medication: 'Losartana', dosage: '50mg', times: ['08:00', '20:00'], active: true },
     { id: 'p2', residentId: 'res-1', medication: 'Metformina', dosage: '850mg', times: ['12:00'], instructions: 'Após o almoço', active: true },
     { id: 'p3', residentId: 'res-1', medication: 'Quetiapina', dosage: '25mg', times: ['21:00'], active: true }
 ];
 
+// Added unitPrice for cost tracking
 export const MOCK_STOCK: StockItem[] = [
-    { id: 's1', residentId: 'res-1', name: 'Fralda Geriátrica G', category: 'hygiene', quantity: 18, unit: 'unidades', minThreshold: 20, avgConsumption: '4/dia' },
-    { id: 's2', residentId: 'res-1', name: 'Lenço Umedecido', category: 'hygiene', quantity: 2, unit: 'pacotes', minThreshold: 1, avgConsumption: '1 pcte/sem' },
-    { id: 's3', residentId: 'res-1', name: 'Losartana 50mg', category: 'medication', quantity: 14, unit: 'comprimidos', minThreshold: 10, avgConsumption: '2/dia' }
+    { id: 's1', residentId: 'res-1', name: 'Fralda Geriátrica G', category: 'hygiene', quantity: 18, unit: 'unidades', minThreshold: 20, avgConsumption: '4/dia', unitPrice: 250 },
+    { id: 's2', residentId: 'res-1', name: 'Lenço Umedecido', category: 'hygiene', quantity: 2, unit: 'pacotes', minThreshold: 1, avgConsumption: '1 pcte/sem', unitPrice: 890 },
+    { id: 's3', residentId: 'res-1', name: 'Losartana 50mg', category: 'medication', quantity: 14, unit: 'comprimidos', minThreshold: 10, avgConsumption: '2/dia', unitPrice: 35 }
 ];
 
 export const MOCK_EVOLUTIONS: Evolution[] = [
@@ -334,8 +351,13 @@ export const MOCK_STAFF_INCIDENTS: StaffIncident[] = [
 ];
 
 export const MOCK_INVOICES: Invoice[] = MOCK_RESIDENTS.map((r, i) => {
-  // Recalcula totais usando centavos
-  const baseAmount = r.feeConfig ? (r.feeConfig.baseValue + r.feeConfig.careLevelAdjustment + r.feeConfig.fixedExtras - r.feeConfig.discount) : (r.benefitValue || 0);
+  // Busca o perfil financeiro separado
+  const financialProfile = MOCK_FINANCIAL_PROFILES.find(fp => fp.residentId === r.id);
+  const feeConfig = financialProfile?.feeConfig;
+  
+  // Recalcula totais usando centavos do perfil financeiro
+  const baseAmount = feeConfig ? (feeConfig.baseValue + feeConfig.careLevelAdjustment + feeConfig.fixedExtras - feeConfig.discount) : (financialProfile?.benefitValue || 0);
+  
   const items: InvoiceItem[] = [{ id: `item-base-${i}`, invoiceId: `inv-${i}`, description: 'Mensalidade Base', amount: baseAmount, category: 'mensalidade', date: '2023-10-01' }];
   const status = i === 0 ? 'pending' : 'paid';
   return { 

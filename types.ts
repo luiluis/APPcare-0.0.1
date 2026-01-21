@@ -29,6 +29,8 @@ export interface Contact {
   isEmergencyContact?: boolean; 
 }
 
+// --- DOMÍNIO FINANCEIRO DO RESIDENTE (SEGREGADO) ---
+
 export interface ContractRecord {
   id: string;
   startDate: string;      // Início da vigência deste valor
@@ -48,6 +50,14 @@ export interface FeeConfig {
   discount: number;           // Em centavos
   notes: string;              
   paymentDay: number;         
+}
+
+export interface ResidentFinancialProfile {
+  id: string;
+  residentId: string;
+  feeConfig?: FeeConfig; 
+  contractHistory?: ContractRecord[];
+  benefitValue?: number; // Em centavos (LOAS/BPC)
 }
 
 // --- CONFIGURAÇÃO FISCAL (Payroll) ---
@@ -107,9 +117,6 @@ export interface Resident {
   status: 'Ativo' | 'Hospitalizado' | 'Inativo';
   careLevel: 1 | 2 | 3;
   admissionDate: string;
-  feeConfig?: FeeConfig; 
-  contractHistory?: ContractRecord[]; // Histórico de reajustes
-  benefitValue?: number; // Em centavos
   created_at?: string;
   prescriptions?: Prescription[];
   stock?: StockItem[];
@@ -169,6 +176,17 @@ export interface StockItem {
   lastOrderDate?: string;
   batch?: string; // Número do lote para rastreabilidade
   expirationDate?: string; // Data de validade para controle sanitário
+  unitPrice?: number; // Preço unitário em centavos para rastreio de custo
+}
+
+export interface FinancialMovement {
+  id: string;
+  type: 'stock_usage'; // Expansível futuramente
+  relatedId: string; // ID do log de medicação ou outro evento
+  amount: number; // Custo em centavos
+  description: string;
+  date: string;
+  branchId: string; // Para centro de custo
 }
 
 export interface Evolution {

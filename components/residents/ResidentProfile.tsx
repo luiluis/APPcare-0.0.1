@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Resident, Invoice, AuditLog, FeeConfig, Prescription, StockItem, Evolution, ResidentDocument } from '../../types.ts';
+import { Resident, ResidentFinancialProfile, Invoice, AuditLog, FeeConfig, Prescription, StockItem, Evolution, ResidentDocument } from '../../types.ts';
 import { BRANCHES } from '../../constants.ts';
 import { ArrowLeft, Activity, Pill, Package, FileText, Wallet, Edit, User, FolderOpen, X } from 'lucide-react';
 import { ClinicalTab } from './tabs/ClinicalTab.tsx';
@@ -13,6 +13,7 @@ import { DocumentsTab } from './tabs/DocumentsTab.tsx';
 
 interface ResidentProfileProps {
   resident: Resident;
+  financialProfile: ResidentFinancialProfile; // Novo
   prescriptions: Prescription[];
   stock: StockItem[];
   evolutions: Evolution[];
@@ -20,6 +21,7 @@ interface ResidentProfileProps {
   invoices: Invoice[];
   onBack: () => void;
   onUpdateResident: (updated: Resident) => void;
+  onUpdateFinancialProfile: (updated: ResidentFinancialProfile) => void; // Novo
   onUpdatePrescriptions: (updated: Prescription[]) => void;
   onUpdateStock: (updated: StockItem[]) => void;
   onUpdateDocuments: (updated: ResidentDocument[]) => void;
@@ -29,7 +31,7 @@ interface ResidentProfileProps {
 }
 
 export const ResidentProfile: React.FC<ResidentProfileProps> = (props) => {
-  const { resident, prescriptions, stock, evolutions, documents, onBack, onUpdateResident, invoices, onLogAction, onAddEvolution, onUpdateFee } = props;
+  const { resident, financialProfile, prescriptions, stock, evolutions, documents, onBack, onUpdateResident, onUpdateFinancialProfile, invoices, onLogAction, onAddEvolution, onUpdateFee } = props;
   
   const [section, setSection] = useState<'health' | 'admin'>('health');
   const [activeTab, setActiveTab] = useState<string>('clinical'); 
@@ -106,7 +108,16 @@ export const ResidentProfile: React.FC<ResidentProfileProps> = (props) => {
          {activeTab === 'stock' && <StockTab resident={{...resident, stock}} onUpdateResident={onUpdateResident} />}
          {activeTab === 'evolution' && <EvolutionTab resident={{...resident, evolutions}} onAddEvolution={onAddEvolution} />}
          {activeTab === 'personal' && <PersonalDataTab resident={resident} />}
-         {activeTab === 'finance' && <FinancialTab resident={resident} invoices={invoices} onUpdateResident={onUpdateResident} onUpdateFee={onUpdateFee} />}
+         {activeTab === 'finance' && (
+             <FinancialTab 
+                resident={resident} 
+                financialProfile={financialProfile} 
+                invoices={invoices} 
+                onUpdateResident={onUpdateResident} 
+                onUpdateFinancialProfile={onUpdateFinancialProfile}
+                onUpdateFee={onUpdateFee} 
+             />
+         )}
          {activeTab === 'docs' && <DocumentsTab resident={resident} documents={documents} onUpdateDocuments={props.onUpdateDocuments} />}
       </div>
 

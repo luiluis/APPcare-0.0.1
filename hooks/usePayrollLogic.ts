@@ -2,42 +2,15 @@
 import { Staff, StaffIncident, TaxTable, PayrollLineItem, PayrollCalculationResult } from '../types';
 import { formatCurrency } from '../lib/utils';
 
-// Tabela INSS 2024 (Valores em Centavos)
-const INSS_TABLE_2024: TaxTable = {
-  year: 2024,
-  minWage: 141200, // R$ 1.412,00
-  ceiling: 778602, // R$ 7.786,02
-  brackets: [
-    { limit: 141200, rate: 0.075 }, // Até 1.412,00
-    { limit: 266668, rate: 0.09 },  // De 1.412,01 até 2.666,68
-    { limit: 400003, rate: 0.12 },  // De 2.666,69 até 4.000,03
-    { limit: 778602, rate: 0.14 },  // De 4.000,04 até 7.786,02
-  ]
-};
-
-// Tabela IRRF 2024 (Valores em Centavos)
-// Vigência a partir de Maio/2024 (MP 1.206/2024 convertida na Lei 14.848/2024)
-const IRRF_TABLE_2024: TaxTable = {
-  year: 2024,
-  minWage: 141200, 
-  ceiling: 0, // Não existe teto de contribuição para IR, apenas faixas
-  brackets: [
-    { limit: 225920, rate: 0, deduction: 0 },           // Isento até 2.259,20
-    { limit: 282665, rate: 0.075, deduction: 16944 },   // 7,5% (Deduz 169,44)
-    { limit: 375105, rate: 0.15, deduction: 38144 },    // 15% (Deduz 381,44)
-    { limit: 466468, rate: 0.225, deduction: 66277 },   // 22,5% (Deduz 662,77)
-    { limit: 999999999, rate: 0.275, deduction: 89600 } // 27,5% (Deduz 896,00) - Acima de 4.664,68
-  ]
-};
-
-const DEDUCTION_PER_DEPENDENT = 18959; // R$ 189,59 por dependente
+// Constante para dedução por dependente (poderia vir da tabela fiscal também futuramente)
+const DEDUCTION_PER_DEPENDENT = 18959; // R$ 189,59
 
 export const usePayrollLogic = () => {
 
   /**
    * Calcula o INSS Progressivo e retorna detalhamento (memória de cálculo).
    */
-  const calculateINSS = (grossSalaryCents: number, table: TaxTable = INSS_TABLE_2024): { total: number, breakdown: string[] } => {
+  const calculateINSS = (grossSalaryCents: number, table: TaxTable): { total: number, breakdown: string[] } => {
     let totalTax = 0;
     let previousLimit = 0;
     const breakdown: string[] = [];
@@ -79,7 +52,7 @@ export const usePayrollLogic = () => {
     grossSalaryCents: number, 
     inssValueCents: number, 
     dependentsCount: number,
-    table: TaxTable = IRRF_TABLE_2024
+    table: TaxTable
   ): { value: number, rate: number, breakdown: string } => {
     
     const dependentsDeduction = dependentsCount * DEDUCTION_PER_DEPENDENT;
@@ -126,7 +99,8 @@ export const usePayrollLogic = () => {
     incidents: StaffIncident[], 
     month: number, 
     year: number,
-    taxTable: TaxTable = INSS_TABLE_2024
+    inssTable: TaxTable,
+    irrfTable: TaxTable
   ): PayrollCalculationResult => {
     const items: PayrollLineItem[] = [];
 
@@ -142,14 +116,14 @@ export const usePayrollLogic = () => {
     // 2. Insalubridade (Earning)
     const level = staff.financialInfo?.insalubridadeLevel || 0;
     if (level > 0) {
-        const insalubrityValue = Math.round((taxTable.minWage * level) / 100);
+        const insalubrityValue = Math.round((inssTable.minWage * level) / 100);
         items.push({
             id: 'insalubrity',
             label: 'Adicional Insalubridade',
             type: 'earning',
             amount: insalubrityValue,
             reference: `${level}%`,
-            description: `Baseado no salário mínimo de ${formatCurrency(taxTable.minWage)}`
+            description: `Baseado no salário mínimo de ${formatCurrency(inssTable.minWage)}`
         });
     }
 
@@ -187,7 +161,7 @@ export const usePayrollLogic = () => {
     const earnings = items.filter(i => i.type === 'earning').reduce((acc, curr) => acc + curr.amount, 0);
     
     // 5. INSS (Deduction)
-    const inssResult = calculateINSS(earnings, taxTable);
+    const inssResult = calculateINSS(earnings, inssTable);
     if (inssResult.total > 0) {
         items.push({
             id: 'inss',
@@ -201,7 +175,7 @@ export const usePayrollLogic = () => {
 
     // 6. IRRF (Deduction) - NOVO
     const dependentsCount = staff.dependents?.length || staff.personalInfo?.childrenCount || 0;
-    const irrfResult = calculateIRRF(earnings, inssResult.total, dependentsCount);
+    const irrfResult = calculateIRRF(earnings, inssResult.total, dependentsCount, irrfTable);
     
     if (irrfResult.value > 0) {
         items.push({
@@ -254,7 +228,6 @@ export const usePayrollLogic = () => {
   };
 
   return {
-    calculateEstimatedSalary,
-    INSS_TABLE_2024
+    calculateEstimatedSalary
   };
 };
