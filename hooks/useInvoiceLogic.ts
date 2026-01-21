@@ -1,6 +1,7 @@
 
 import { Invoice, InvoiceItem, InvoiceStatus, InvoiceCategory, CreateInvoiceDTO, QuickConsumeDTO } from '../types';
 import { toCents, parseDateToUTC, sanitizeInput } from '../lib/utils';
+import { storageService } from '../services/storageService';
 
 interface UseInvoiceLogicProps {
   invoices: Invoice[];
@@ -11,7 +12,7 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
   
   // --- Core Invoice Actions (CRUD) ---
 
-  const createRecurringInvoices = (data: CreateInvoiceDTO) => {
+  const createRecurringInvoices = async (data: CreateInvoiceDTO) => {
     // CONVERSÃO CRÍTICA: String Input -> Centavos
     const amountCents = toCents(data.amount);
 
@@ -30,10 +31,15 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
     const dueDateString = baseDate.toISOString().split('T')[0]; 
     const id = `inv-gen-${Date.now()}`;
 
-    // NOTA TÉCNICA: Em produção, o URL.createObjectURL deve ser gerenciado com cuidado
-    // ou substituído por URLs de storage reais. Aqui, confiamos que o componente pai
-    // lidará com o ciclo de vida do arquivo se necessário, ou que o app é recarregado.
-    const mockAttachmentUrl = data.attachment ? URL.createObjectURL(data.attachment) : undefined;
+    // Upload seguro via Service (Async) em vez de createObjectURL direto no render cycle
+    let attachmentUrl: string | undefined = undefined;
+    if (data.attachment) {
+        try {
+            attachmentUrl = await storageService.uploadFile(data.attachment, 'invoices');
+        } catch (e) {
+            console.error("Falha no upload do anexo", e);
+        }
+    }
 
     // Objeto de Fatura Única com Definição de Recorrência
     const newInvoice: Invoice = {
@@ -54,7 +60,7 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
         category: data.category as InvoiceCategory,
         date: dueDateString
       }],
-      attachmentUrl: mockAttachmentUrl,
+      attachmentUrl: attachmentUrl,
       supplier: sanitizedSupplier,
       payments: [],
       // Nova estrutura de metadados
@@ -69,7 +75,7 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
     onUpdateInvoices([...invoices, newInvoice]);
   };
 
-  const addQuickConsume = (data: QuickConsumeDTO) => {
+  const addQuickConsume = async (data: QuickConsumeDTO) => {
     // Conversão para Centavos
     const amountCents = toCents(data.amount);
 
@@ -93,7 +99,16 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
     );
 
     let updatedInvoices = [...invoices];
-    const mockAttachmentUrl = data.attachment ? URL.createObjectURL(data.attachment) : undefined;
+    
+    // Upload seguro via Service
+    let attachmentUrl: string | undefined = undefined;
+    if (data.attachment) {
+        try {
+            attachmentUrl = await storageService.uploadFile(data.attachment, 'invoices');
+        } catch (e) {
+            console.error("Falha no upload do anexo", e);
+        }
+    }
 
     if (targetInvoiceIndex >= 0) {
       // Append to existing
@@ -111,7 +126,7 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
         ...targetInvoice,
         items: [...targetInvoice.items, newItem],
         totalAmount: targetInvoice.totalAmount + amountCents, // Soma de inteiros
-        attachmentUrl: targetInvoice.attachmentUrl || mockAttachmentUrl
+        attachmentUrl: targetInvoice.attachmentUrl || attachmentUrl
       };
     } else {
       // Create new invoice for the consumption
@@ -139,7 +154,7 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
           category: data.category as InvoiceCategory,
           date: data.date
         }],
-        attachmentUrl: mockAttachmentUrl,
+        attachmentUrl: attachmentUrl,
         payments: []
       };
       updatedInvoices.push(newInvoice);

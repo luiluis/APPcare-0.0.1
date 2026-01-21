@@ -1,16 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2, Calendar, Wallet, CreditCard, DollarSign, Calculator } from 'lucide-react';
-import { getLocalISOString, formatCurrency } from '../../lib/utils';
+import { getLocalISOString, formatCurrency, toCents } from '../../lib/utils';
 import { PaymentConfirmDTO } from '../../types';
 
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (amount: number, data: PaymentConfirmDTO) => void;
-  originalAmount: number; // Valor Total da Fatura
-  paidAmount: number;     // Quanto já foi pago antes
-  remainingAmount: number;// Quanto falta (Original - Pago)
+  originalAmount: number; // Valor Total da Fatura (Em Centavos)
+  paidAmount: number;     // Quanto já foi pago antes (Em Centavos)
+  remainingAmount: number;// Quanto falta (Em Centavos)
   count: number;          // Quantos itens selecionados
 }
 
@@ -32,22 +32,32 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   });
 
   // Ao abrir, sugere o valor restante total
+  // CRÍTICO: remainingAmount vem em centavos (ex: 12050), input espera float (120.50)
   useEffect(() => {
     if (isOpen) {
-      setAmountToPay(remainingAmount.toFixed(2));
+      setAmountToPay((remainingAmount / 100).toFixed(2));
     }
   }, [isOpen, remainingAmount]);
 
   const handleConfirm = () => {
-      const value = parseFloat(amountToPay);
-      if (!value || value <= 0) {
+      // 1. Converte input visual (float string) para centavos para validação segura
+      const valueInCents = toCents(amountToPay);
+      
+      if (valueInCents <= 0) {
           alert("O valor do pagamento deve ser maior que zero.");
           return;
       }
-      if (value > remainingAmount + 0.01) { // Margem pequena pra float
+
+      // Validação Inteiro vs Inteiro para evitar erros de ponto flutuante
+      // Margem de erro de 1 centavo permitida
+      if (valueInCents > remainingAmount + 1) { 
           if(!confirm("O valor digitado é maior que a dívida restante. Deseja prosseguir mesmo assim?")) return;
       }
-      onConfirm(value, formData);
+
+      // 2. Passa o valor float para o hook (que fará a multiplicação por 100 internamente)
+      // Mantemos parseFloat aqui pois a assinatura do onConfirm espera number (float da UI)
+      // O hook usePaymentProcessing faz Math.round(amount * 100)
+      onConfirm(parseFloat(amountToPay), formData);
   };
 
   if (!isOpen) return null;
@@ -102,6 +112,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     <input 
                         type="number"
                         step="0.01"
+                        min="0"
                         className="w-full pl-12 pr-4 py-4 border-2 border-gray-200 rounded-xl text-2xl font-bold text-gray-900 focus:ring-0 focus:border-emerald-500 outline-none transition-all bg-gray-50 focus:bg-white"
                         placeholder="0.00"
                         value={amountToPay}

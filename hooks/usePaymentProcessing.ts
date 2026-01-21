@@ -1,5 +1,6 @@
 
 import { Invoice, InvoiceStatus, PaymentConfirmDTO, InvoicePayment } from '../types';
+import { sanitizeInput } from '../lib/utils';
 
 interface UsePaymentProcessingProps {
   invoices: Invoice[];
@@ -15,6 +16,8 @@ export const usePaymentProcessing = ({ invoices, onUpdateInvoices }: UsePaymentP
   const registerPayment = (invoiceId: string, amountInput: number, method: string, date: string, notes?: string) => {
     // Conversão Float UI -> Int Centavos
     const amountCents = Math.round(amountInput * 100);
+    // Sanitização para segurança
+    const sanitizedNotes = sanitizeInput(notes);
 
     const updatedInvoices = invoices.map(inv => {
       if (inv.id !== invoiceId) return inv;
@@ -24,7 +27,7 @@ export const usePaymentProcessing = ({ invoices, onUpdateInvoices }: UsePaymentP
         amount: amountCents,
         date: date,
         method: method,
-        notes: notes
+        notes: sanitizedNotes
       };
 
       const currentPayments = inv.payments || [];

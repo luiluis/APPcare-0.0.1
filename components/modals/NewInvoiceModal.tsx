@@ -249,6 +249,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Valor (R$)</label>
                             <input 
                                 type="number" 
+                                step="0.01"
                                 className={inputBaseClass}
                                 placeholder="0,00"
                                 value={formData.amount}
@@ -336,6 +337,7 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({ isOpen, onClos
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Valor (R$)</label>
                             <input 
                                 type="number" 
+                                step="0.01"
                                 className={inputBaseClass}
                                 placeholder="0,00"
                                 value={formData.amount}

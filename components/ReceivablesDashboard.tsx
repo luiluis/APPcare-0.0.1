@@ -54,6 +54,22 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
     onUpdateInvoices
   });
 
+  // --- PERFORMANCE OPTIMIZATION ---
+  // Cria um Map para acesso O(1) aos residentes, evitando residents.find() dentro do map das faturas
+  const residentsMap = useMemo(() => {
+    return residents.reduce((acc, resident) => {
+        acc[resident.id] = resident;
+        return acc;
+    }, {} as Record<string, Resident>);
+  }, [residents]);
+
+  const branchesMap = useMemo(() => {
+    return BRANCHES.reduce((acc, branch) => {
+        acc[branch.id] = branch.name;
+        return acc;
+    }, {} as Record<string, string>);
+  }, []);
+
   // --- FILTERING LOGIC ---
   const filteredInvoices = useMemo(() => {
     return invoices
@@ -64,8 +80,8 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
         return inDate && inStatus && inCategory;
       })
       .map(inv => {
-        const resident = inv.residentId ? residents.find(r => r.id === inv.residentId) : null;
-        const branchName = inv.branchId ? BRANCHES.find(b => b.id === inv.branchId)?.name : 'N/A';
+        const resident = inv.residentId ? residentsMap[inv.residentId] : null;
+        const branchName = inv.branchId ? branchesMap[inv.branchId] : 'N/A';
         return { 
           ...inv, 
           residentName: resident?.name || (inv.type === 'expense' ? 'Despesa Operacional' : 'Sem Residente'),
@@ -76,7 +92,7 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
         inv.residentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         inv.items[0]?.description.toLowerCase().includes(searchTerm.toLowerCase())
       );
-  }, [invoices, residents, searchTerm, startDate, endDate, statusFilter, categoryFilter]);
+  }, [invoices, residentsMap, branchesMap, searchTerm, startDate, endDate, statusFilter, categoryFilter]);
 
   // --- STATS CALCULATION ---
   const stats = useMemo(() => {
@@ -430,7 +446,7 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
       <InvoiceDetailsModal 
         invoice={modalState.details} 
         onClose={() => setModalState(s => ({ ...s, details: null }))}
-        resident={residents.find(r => r.id === modalState.details?.residentId)}
+        resident={residentsMap[modalState.details?.residentId || '']}
         onPay={() => initiatePayment(modalState.details ? [modalState.details.id] : [])}
       />
 

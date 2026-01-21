@@ -142,9 +142,12 @@ export const fromCents = (cents: number): number => {
 
 /**
  * Formata valor em Centavos para BRL.
+ * Agora divide por 100 antes de formatar, pois recebe Inteiro.
  * Ex: 1050 -> R$ 10,50
  */
-export const formatCurrency = (valInCents: number | string): string => {
+export const formatCurrency = (valInCents: number | string | undefined | null): string => {
+  if (valInCents === undefined || valInCents === null) return 'R$ 0,00';
+  
   const num = Number(valInCents);
   if (isNaN(num)) return 'R$ 0,00';
   

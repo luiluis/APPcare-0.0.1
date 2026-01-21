@@ -97,6 +97,7 @@ export const QuickConsumeModal: React.FC<QuickConsumeModalProps> = ({ isOpen, on
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Valor</label>
                 <input 
                   type="number"
+                  step="0.01"
                   placeholder="0.00"
                   className={inputClass}
                   value={formData.amount}
