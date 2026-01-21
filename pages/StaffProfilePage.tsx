@@ -90,7 +90,7 @@ export const StaffProfilePage: React.FC = () => {
         </div>
 
         <div className="flex-1">
-            {activeTab === 'info' && <StaffInfoTab staff={staff} onUpdate={handleUpdateStaff} />}
+            {activeTab === 'info' && <StaffInfoTab staff={staff} incidents={incidents} onUpdate={handleUpdateStaff} />}
             {activeTab === 'incidents' && <StaffIncidentsTab staff={staff} incidents={incidents} onUpdateIncidents={setIncidents} />}
             {activeTab === 'docs' && <StaffDocumentsTab staff={staff} documents={documents} onUpdateDocuments={setDocuments} />}
         </div>

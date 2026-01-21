@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Resident, StockItem } from '../../../types';
-import { Package, AlertTriangle, MinusCircle, PlusCircle, ShoppingCart, Send, Edit2, Trash2, X, CheckCircle, Clock } from 'lucide-react';
+import { Package, AlertTriangle, MinusCircle, PlusCircle, ShoppingCart, Send, Edit2, Trash2, X, CheckCircle, Clock, AlertOctagon, Calendar } from 'lucide-react';
 
 interface StockTabProps {
   resident: Resident;
@@ -23,9 +23,35 @@ export const StockTab: React.FC<StockTabProps> = ({ resident, onUpdateResident }
     quantity: 0, 
     unit: 'unidades', 
     minThreshold: 5, 
-    avgConsumption: '' 
+    avgConsumption: '',
+    batch: '',          
+    expirationDate: ''  
   };
   const [form, setForm] = useState<StockItem>(initialFormState);
+
+  // --- SORTING & LOGIC ---
+  const sortedStock = useMemo(() => {
+    if (!stock) return [];
+    
+    return [...stock].sort((a, b) => {
+        // Prioridade 1: Itens com validade definida aparecem antes
+        if (a.expirationDate && !b.expirationDate) return -1;
+        if (!a.expirationDate && b.expirationDate) return 1;
+
+        // Prioridade 2: Menor data de validade primeiro (Vencidos -> A Vencer)
+        if (a.expirationDate && b.expirationDate) {
+            return new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime();
+        }
+
+        // Prioridade 3: Estoque baixo
+        const aLow = a.quantity <= a.minThreshold;
+        const bLow = b.quantity <= b.minThreshold;
+        if (aLow && !bLow) return -1;
+        if (!aLow && bLow) return 1;
+
+        return 0;
+    });
+  }, [stock]);
 
   // --- ACTIONS ---
 
@@ -87,44 +113,82 @@ export const StockTab: React.FC<StockTabProps> = ({ resident, onUpdateResident }
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {stock?.map(item => {
+        {sortedStock.map(item => {
           const isLow = item.quantity <= item.minThreshold;
           const isOrdered = item.status === 'ordered';
 
+          // Lógica de Vencimento
+          const today = new Date();
+          today.setHours(0,0,0,0);
+          
+          let isExpired = false;
+          let isExpiringSoon = false;
+
+          if (item.expirationDate) {
+              const expDate = new Date(item.expirationDate);
+              // Ajuste simples para garantir comparação correta da string YYYY-MM-DD
+              expDate.setHours(0,0,0,0);
+              
+              isExpired = expDate < today;
+              
+              const thirtyDaysFromNow = new Date(today);
+              thirtyDaysFromNow.setDate(today.getDate() + 30);
+              
+              isExpiringSoon = !isExpired && expDate <= thirtyDaysFromNow;
+          }
+
+          // Definição de Estilos baseada na prioridade: Vencido > Vencendo > Baixo > Normal
+          let cardClasses = "bg-white border-gray-100";
+          if (isExpired) cardClasses = "bg-red-50 border-red-300 ring-1 ring-red-200";
+          else if (isExpiringSoon) cardClasses = "bg-amber-50 border-amber-300 ring-1 ring-amber-200";
+          else if (isLow && !isOrdered) cardClasses = "bg-rose-50 border-rose-200";
+
           return (
-            <div key={item.id} className={`p-5 rounded-xl border shadow-sm hover:shadow-md transition-all flex flex-col justify-between group relative
-                ${isLow && !isOrdered ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100'}
-            `}>
+            <div key={item.id} className={`p-5 rounded-xl border shadow-sm hover:shadow-md transition-all flex flex-col justify-between group relative ${cardClasses}`}>
               
               {/* Edit Controls (Hover) */}
-              <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleOpenEdit(item)} className="p-1.5 bg-white/50 hover:bg-blue-100 text-gray-500 hover:text-blue-600 rounded-lg"><Edit2 className="w-3.5 h-3.5"/></button>
-                  <button onClick={() => handleDelete(item.id)} className="p-1.5 bg-white/50 hover:bg-red-100 text-gray-500 hover:text-red-600 rounded-lg"><Trash2 className="w-3.5 h-3.5"/></button>
+              <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <button onClick={() => handleOpenEdit(item)} className="p-1.5 bg-white/80 hover:bg-blue-100 text-gray-500 hover:text-blue-600 rounded-lg shadow-sm"><Edit2 className="w-3.5 h-3.5"/></button>
+                  <button onClick={() => handleDelete(item.id)} className="p-1.5 bg-white/80 hover:bg-red-100 text-gray-500 hover:text-red-600 rounded-lg shadow-sm"><Trash2 className="w-3.5 h-3.5"/></button>
               </div>
 
               <div>
                 <div className="flex justify-between items-start mb-3">
-                  <div className={`p-2.5 rounded-lg ${isLow ? 'bg-white/60 text-red-500' : 'bg-gray-100 text-gray-600'}`}>
-                      <Package className="w-6 h-6" />
+                  <div className={`p-2.5 rounded-lg ${isExpired ? 'bg-red-200 text-red-700' : isExpiringSoon ? 'bg-amber-200 text-amber-700' : isLow ? 'bg-white/60 text-red-500' : 'bg-gray-100 text-gray-600'}`}>
+                      {isExpired ? <AlertOctagon className="w-6 h-6" /> : isExpiringSoon ? <Calendar className="w-6 h-6" /> : <Package className="w-6 h-6" />}
                   </div>
-                  {isOrdered ? (
-                     <span className="bg-amber-100 text-amber-800 px-2 py-1 rounded text-xs font-bold flex items-center gap-1 mr-14">
-                        <Clock className="w-3 h-3" /> Solicitado
-                     </span>
-                  ) : isLow && (
-                    <span className="bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold flex items-center gap-1 animate-pulse mr-14 border border-red-200">
-                      <AlertTriangle className="w-3 h-3" /> Baixo
-                    </span>
-                  )}
+                  
+                  {/* Badges de Status */}
+                  <div className="flex flex-col items-end gap-1 mr-14">
+                      {isExpired && (
+                        <span className="bg-red-600 text-white px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 shadow-sm animate-pulse">
+                          <X className="w-3 h-3" /> VENCIDO
+                        </span>
+                      )}
+                      {isExpiringSoon && (
+                        <span className="bg-amber-500 text-white px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 shadow-sm">
+                          <AlertTriangle className="w-3 h-3" /> VENCE EM BREVE
+                        </span>
+                      )}
+                      {isOrdered ? (
+                         <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> Solicitado
+                         </span>
+                      ) : isLow && !isExpired && (
+                        <span className="bg-rose-100 text-rose-600 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" /> BAIXO ESTOQUE
+                        </span>
+                      )}
+                  </div>
                 </div>
 
-                <h4 className="font-bold text-gray-800 text-lg mb-1 pr-14">{item.name}</h4>
+                <h4 className="font-bold text-gray-800 text-lg mb-1 pr-2 truncate">{item.name}</h4>
                 <div className="flex justify-between items-center mb-4">
-                  <p className="text-xs text-gray-400 uppercase font-semibold">{item.category}</p>
-                  {item.avgConsumption && (
-                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-medium">
-                      Média: {item.avgConsumption}
-                    </span>
+                  <p className="text-xs text-gray-500 uppercase font-semibold">{item.category}</p>
+                  {item.expirationDate && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isExpired ? 'bg-red-200 text-red-800' : isExpiringSoon ? 'bg-amber-200 text-amber-800' : 'bg-gray-100 text-gray-500'}`}>
+                          Val: {new Date(item.expirationDate).toLocaleDateString('pt-BR')}
+                      </span>
                   )}
                 </div>
                 
@@ -138,12 +202,17 @@ export const StockTab: React.FC<StockTabProps> = ({ resident, onUpdateResident }
               <div className="flex flex-col gap-2">
                  <button 
                     onClick={() => handleQuickSubtract(item)}
-                    className="w-full flex items-center justify-center gap-2 bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 py-2.5 rounded-lg text-sm font-bold transition-colors"
+                    disabled={isExpired}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-colors border
+                        ${isExpired 
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' 
+                            : 'bg-white border-rose-200 hover:bg-rose-50 text-rose-700'
+                        }`}
                  >
                     <MinusCircle className="w-4 h-4" /> Registrar Uso (-1)
                  </button>
                  
-                 {isLow && !isOrdered && (
+                 {isLow && !isOrdered && !isExpired && (
                     <button 
                         onClick={() => handleRequestReposition(item)}
                         className="w-full flex items-center justify-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 py-2.5 rounded-lg text-sm font-bold transition-colors border border-amber-200" 
@@ -214,6 +283,28 @@ export const StockTab: React.FC<StockTabProps> = ({ resident, onUpdateResident }
                             placeholder="Ex: unidades, caixas"
                             value={form.unit}
                             onChange={e => setForm({...form, unit: e.target.value})}
+                        />
+                     </div>
+                 </div>
+
+                 {/* NOVOS CAMPOS: LOTE E VALIDADE */}
+                 <div className="grid grid-cols-2 gap-4">
+                     <div>
+                        <label className={labelStyle}>Lote (Opcional)</label>
+                        <input 
+                            className={inputStyle} 
+                            placeholder="Ex: L8920"
+                            value={form.batch || ''}
+                            onChange={e => setForm({...form, batch: e.target.value})}
+                        />
+                     </div>
+                     <div>
+                        <label className={labelStyle}>Validade</label>
+                        <input 
+                            type="date"
+                            className={inputStyle} 
+                            value={form.expirationDate || ''}
+                            onChange={e => setForm({...form, expirationDate: e.target.value})}
                         />
                      </div>
                  </div>

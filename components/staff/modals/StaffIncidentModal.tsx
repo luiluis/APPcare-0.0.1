@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { X, AlertCircle, Camera, Loader2, UploadCloud } from 'lucide-react';
+import { X, AlertCircle, Camera, Loader2, UploadCloud, DollarSign } from 'lucide-react';
 import { Staff, StaffIncident, StaffIncidentType } from '../../../types';
 import { storageService } from '../../../services/storageService';
 import { generateStoragePath } from '../../../lib/utils';
@@ -17,6 +17,7 @@ export const StaffIncidentModal: React.FC<StaffIncidentModalProps> = ({ isOpen, 
   const [type, setType] = useState<StaffIncidentType>('atestado');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
+  const [financialImpact, setFinancialImpact] = useState(''); // Estado para o valor financeiro
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
   const [isUploading, setIsUploading] = useState(false);
@@ -50,7 +51,8 @@ export const StaffIncidentModal: React.FC<StaffIncidentModalProps> = ({ isOpen, 
         type,
         date,
         description,
-        attachmentUrl
+        attachmentUrl,
+        financialImpact: financialImpact ? parseFloat(financialImpact) : undefined
       });
       
       onClose();
@@ -58,6 +60,7 @@ export const StaffIncidentModal: React.FC<StaffIncidentModalProps> = ({ isOpen, 
       setDescription('');
       setSelectedFile(null);
       setType('atestado');
+      setFinancialImpact('');
     } catch (error) {
       alert("Erro ao salvar ocorrência.");
     } finally {
@@ -79,7 +82,7 @@ export const StaffIncidentModal: React.FC<StaffIncidentModalProps> = ({ isOpen, 
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[90vh]">
         
         <div className="bg-gray-900 p-6 text-white flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -92,7 +95,7 @@ export const StaffIncidentModal: React.FC<StaffIncidentModalProps> = ({ isOpen, 
           <button onClick={onClose} className="hover:bg-gray-700 p-2 rounded-full transition-colors"><X className="w-6 h-6"/></button>
         </div>
 
-        <div className="p-8 space-y-6">
+        <div className="p-8 space-y-6 overflow-y-auto">
           
           <div className="grid grid-cols-2 gap-4">
              <div>
@@ -121,10 +124,30 @@ export const StaffIncidentModal: React.FC<StaffIncidentModalProps> = ({ isOpen, 
              </div>
           </div>
 
+          {/* Campo de Impacto Financeiro */}
+          <div>
+             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Impacto Financeiro (R$)</label>
+             <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input 
+                   type="number"
+                   step="0.01"
+                   placeholder="0.00"
+                   className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900 font-medium"
+                   value={financialImpact}
+                   onChange={e => setFinancialImpact(e.target.value)}
+                />
+             </div>
+             <p className="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                Use valores negativos para descontos (ex: -50.00) e positivos para bônus.
+             </p>
+          </div>
+
           <div>
              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Descrição</label>
              <textarea 
-               className="w-full border border-gray-200 rounded-xl p-4 outline-none focus:ring-2 focus:ring-blue-500 h-32 resize-none bg-white text-gray-900"
+               className="w-full border border-gray-200 rounded-xl p-4 outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none bg-white text-gray-900"
                placeholder="Descreva o motivo, dias de afastamento ou detalhes..."
                value={description}
                onChange={e => setDescription(e.target.value)}

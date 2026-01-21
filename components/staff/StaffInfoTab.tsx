@@ -1,21 +1,25 @@
 
-import React, { useState, useEffect } from 'react';
-import { Staff, Dependent } from '../../types';
-import { User, Phone, MapPin, Calendar, Briefcase, CreditCard, Building, Edit2, Check, AlertOctagon, Power, RefreshCw, Palmtree, CheckCircle2, Zap, Landmark, Copy, Bus, Utensils, Baby, Trash2, Plus, Shield, Lock, Key, AlertCircle, X, AlertTriangle, Calculator, Clock, Send, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Staff, Dependent, StaffIncident } from '../../types';
+import { User, Phone, MapPin, Calendar, Briefcase, CreditCard, Building, Edit2, Check, AlertOctagon, Power, RefreshCw, Palmtree, CheckCircle2, Zap, Landmark, Copy, Bus, Utensils, Baby, Trash2, Plus, Shield, Lock, Key, AlertCircle, X, AlertTriangle, Calculator, Send, CheckCircle, Banknote, TrendingDown, TrendingUp, DollarSign } from 'lucide-react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
-import { formatCPF, formatPhone, stripSpecialChars, formatDateTime } from '../../lib/utils';
+import { formatCPF, formatPhone, stripSpecialChars, formatDateTime, formatCurrency } from '../../lib/utils';
+import { usePayrollLogic } from '../../hooks/usePayrollLogic';
 
 interface StaffInfoTabProps {
   staff: Staff;
+  incidents?: StaffIncident[]; // Opcional para manter compatibilidade se não passado, mas idealmente obrigatório
   onUpdate: (updatedStaff: Staff) => void;
 }
 
-export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) => {
+export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, incidents = [], onUpdate }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Staff>(staff);
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   
+  const { calculateEstimatedSalary } = usePayrollLogic();
+
   // State temporário para novo dependente
   const [newDependent, setNewDependent] = useState<Partial<Dependent>>({ name: '', relation: 'filho', birthDate: '' });
   const [isAddingDependent, setIsAddingDependent] = useState(false);
@@ -24,6 +28,14 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
   useEffect(() => {
     setFormData(staff);
   }, [staff]);
+
+  // --- CÁLCULO DE FOLHA (MÊS ATUAL) ---
+  const payrollPreview = useMemo(() => {
+      const today = new Date();
+      return calculateEstimatedSalary(staff, incidents, today.getMonth() + 1, today.getFullYear());
+  }, [staff, incidents]);
+
+  const hasHighDiscounts = payrollPreview.totalDiscounts > ((payrollPreview.base + payrollPreview.insalubrity) * 0.1);
 
   const handleInputChange = (section: keyof Staff, field: string, value: any, nestedField?: string) => {
     let formattedValue = value;
@@ -394,6 +406,60 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                     </button>
                 </div>
             )}
+        </div>
+
+        {/* CARD DE PRÉVIA FINANCEIRA (NOVO) */}
+        <div className="lg:col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
+            <div className="relative z-10 flex flex-col md:flex-row gap-6 md:items-start justify-between">
+               
+               <div className="flex-1">
+                   <h3 className="font-bold text-lg flex items-center gap-2 mb-1">
+                       <Banknote className="w-5 h-5 text-emerald-400" /> Prévia da Folha
+                   </h3>
+                   <p className="text-slate-400 text-xs">Estimativa para {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
+               </div>
+
+               <div className="flex-1 grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                   <div className="flex justify-between text-slate-300">
+                       <span>Salário Base</span>
+                       <span className="font-medium text-white">{formatCurrency(payrollPreview.base)}</span>
+                   </div>
+                   <div className="flex justify-between text-slate-300">
+                       <span>Insalubridade</span>
+                       <span className="font-medium text-white">{formatCurrency(payrollPreview.insalubrity)}</span>
+                   </div>
+                   
+                   {payrollPreview.totalAdditions > 0 && (
+                       <div className="flex justify-between text-emerald-300">
+                           <span className="flex items-center gap-1"><TrendingUp className="w-3 h-3"/> Adicionais</span>
+                           <span className="font-bold">+ {formatCurrency(payrollPreview.totalAdditions)}</span>
+                       </div>
+                   )}
+
+                   {payrollPreview.totalDiscounts > 0 && (
+                       <div className="flex justify-between text-rose-300">
+                           <span className="flex items-center gap-1"><TrendingDown className="w-3 h-3"/> Descontos</span>
+                           <span className="font-bold">- {formatCurrency(payrollPreview.totalDiscounts)}</span>
+                       </div>
+                   )}
+               </div>
+
+               <div className="bg-white/10 p-3 rounded-lg min-w-[160px] text-right border border-white/10">
+                   <p className="text-[10px] text-slate-300 uppercase font-bold tracking-wide">Estimativa Líquida</p>
+                   <p className="text-2xl font-bold text-emerald-400">{formatCurrency(payrollPreview.finalEstimate)}</p>
+               </div>
+            </div>
+
+            {hasHighDiscounts && (
+                <div className="mt-4 bg-rose-500/20 border border-rose-500/30 rounded-lg p-2 text-xs text-rose-200 flex items-center gap-2 relative z-10 animate-in fade-in">
+                    <AlertTriangle className="w-4 h-4 text-rose-400" />
+                    <span>Atenção: Os descontos deste mês ultrapassam 10% da remuneração bruta.</span>
+                </div>
+            )}
+
+            <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
+                <DollarSign className="w-40 h-40 text-white" />
+            </div>
         </div>
 
         {/* Dados Pessoais */}

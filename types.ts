@@ -122,6 +122,8 @@ export interface StockItem {
   avgConsumption?: string;
   status?: 'ok' | 'low' | 'ordered';
   lastOrderDate?: string;
+  batch?: string; // Número do lote para rastreabilidade
+  expirationDate?: string; // Data de validade para controle sanitário
 }
 
 export interface Evolution {
@@ -335,6 +337,8 @@ export interface StaffIncident {
   description: string;
   attachmentUrl?: string;
   createdAt: string;
+  financialImpact?: number;
+  impactDescription?: string;
 }
 
 export interface HRAlert {
