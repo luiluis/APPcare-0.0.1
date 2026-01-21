@@ -8,6 +8,28 @@ export interface Branch {
   id: string;
   name: string;
   type: BranchType;
+  bankConfig?: BankIntegrationConfig; // Nova configuração bancária por unidade
+}
+
+export interface BankIntegrationConfig {
+  bankCode: string; // Ex: 341 (Itaú)
+  agency: string;
+  account: string;
+  accountDigit: string;
+  wallet: string; // Carteira de cobrança (Ex: 109)
+  agreementNumber?: string; // Número do convênio
+}
+
+export interface BoletoRecord {
+  id: string;
+  invoiceId: string;
+  nossoNumero: string; // Identificador único no banco
+  barcode: string;
+  digitableLine: string;
+  status: 'generated' | 'remittance_sent' | 'registered' | 'paid' | 'rejected';
+  generatedAt: string;
+  dueDate: string;
+  value: number; // Em centavos
 }
 
 export interface AuthUser {
@@ -58,6 +80,23 @@ export interface ResidentFinancialProfile {
   feeConfig?: FeeConfig; 
   contractHistory?: ContractRecord[];
   benefitValue?: number; // Em centavos (LOAS/BPC)
+}
+
+// --- BATCH PROCESS DTOs (Novos) ---
+
+export interface BatchReadjustmentPreview {
+  residentId: string;
+  residentName: string;
+  currentTotal: number;
+  newTotal: number;
+  diff: number;
+  percentage: number;
+}
+
+export interface BatchReadjustmentResult {
+  successCount: number;
+  errorCount: number;
+  details: string[];
 }
 
 // --- CONFIGURAÇÃO FISCAL (Payroll) ---
@@ -292,6 +331,7 @@ export interface Invoice {
   attachmentUrl?: string;
   supplier?: string;
   recurrence?: RecurrenceConfig; // Nova definição de recorrência
+  boleto?: BoletoRecord; // Dados do boleto gerado
 }
 
 export interface FinancialRecord {
