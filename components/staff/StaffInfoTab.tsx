@@ -5,7 +5,7 @@ import {
   User, Briefcase, Wallet, ChevronDown, ChevronUp, 
   Save, Plus, Trash2, CheckCircle2
 } from 'lucide-react';
-import { formatCPF, formatPhone, stripSpecialChars, toCents } from '../../lib/utils';
+import { formatCPF, formatPhone, stripSpecialChars } from '../../lib/utils';
 
 interface StaffInfoTabProps {
   staff: Staff;
@@ -16,7 +16,14 @@ interface StaffInfoTabProps {
 const inputClass = "w-full border border-gray-300 bg-white rounded-lg px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all disabled:bg-gray-100 disabled:text-gray-500";
 const labelClass = "text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 block";
 
-// Subcomponente de Input Monetário
+// Função Utilitária Interna
+const formatMoneyInput = (cents: number | undefined | null): string => {
+  if (cents === undefined || cents === null || isNaN(cents)) return "0,00";
+  const value = cents / 100;
+  return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+// Subcomponente de Input Monetário Refatorado
 const MoneyInput = ({ 
   label, 
   valueInCents, 
@@ -28,26 +35,12 @@ const MoneyInput = ({
   onChange: (cents: number) => void,
   disabled?: boolean
 }) => {
-  const [displayValue, setDisplayValue] = useState('');
-
-  useEffect(() => {
-    if (valueInCents !== undefined) {
-      setDisplayValue((valueInCents / 100).toFixed(2).replace('.', ','));
-    }
-  }, [valueInCents]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value;
-    val = val.replace(/[^0-9,]/g, '');
-    const parts = val.split(',');
-    if (parts.length > 2) return;
-    setDisplayValue(val);
-  };
-
-  const handleBlur = () => {
-    const cents = toCents(displayValue);
+  
+  const handleMoneyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Remove tudo que não é dígito
+    const rawValue = e.target.value.replace(/\D/g, '');
+    const cents = rawValue ? parseInt(rawValue, 10) : 0;
     onChange(cents);
-    setDisplayValue((cents / 100).toFixed(2).replace('.', ','));
   };
 
   return (
@@ -58,10 +51,10 @@ const MoneyInput = ({
         <input 
           type="text"
           disabled={disabled}
+          maxLength={15}
           className={`w-full border border-gray-300 bg-white rounded-lg pl-10 pr-3 py-2.5 text-sm font-bold text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all disabled:bg-gray-100 disabled:text-gray-500`}
-          value={displayValue}
-          onChange={handleChange}
-          onBlur={handleBlur}
+          value={formatMoneyInput(valueInCents)}
+          onChange={handleMoneyChange}
           placeholder="0,00"
         />
       </div>
