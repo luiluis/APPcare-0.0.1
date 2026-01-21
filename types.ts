@@ -52,6 +52,23 @@ export interface TaxTable {
   brackets: TaxBracket[]; // Faixas progressivas
 }
 
+export interface PayrollLineItem {
+  id: string;
+  label: string;
+  type: 'earning' | 'deduction';
+  amount: number; // Em centavos
+  reference?: string; // Ex: "7.5%", "20%", "2 dias"
+  description?: string; // Detalhe técnico ou memória de cálculo
+}
+
+export interface PayrollCalculationResult {
+  items: PayrollLineItem[];
+  grossTotal: number;
+  discountTotal: number;
+  netTotal: number;
+  baseSalary: number; // Mantido para referência rápida
+}
+
 // --- ENTIDADES RELACIONAIS ---
 
 export type DocumentCategory = 'contract' | 'identity' | 'medical' | 'other';

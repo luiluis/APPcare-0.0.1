@@ -2,15 +2,17 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Users, Calendar, DollarSign, CheckCircle2, AlertCircle, 
-  FileText, Wallet, ChevronLeft, ChevronRight, Calculator, Check
+  FileText, Wallet, ChevronLeft, ChevronRight, Calculator, Check,
+  Info
 } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { usePayrollLogic } from '../hooks/usePayrollLogic';
 import { usePayrollGeneration } from '../hooks/usePayrollGeneration';
 import { usePaymentProcessing } from '../hooks/usePaymentProcessing';
 import { formatCurrency, formatDateBr } from '../lib/utils';
-import { InvoiceStatus, InvoiceCategory } from '../types';
+import { InvoiceStatus, InvoiceCategory, PayrollLineItem, PayrollCalculationResult } from '../types';
 import { StatCard } from '../components/StatCard';
+import { PayrollDetailModal } from '../components/modals/PayrollDetailModal';
 
 export const PayrollPage: React.FC = () => {
   const { staff, invoices, setInvoices, staffIncidents, selectedBranchId } = useData();
@@ -22,6 +24,14 @@ export const PayrollPage: React.FC = () => {
   const month = selectedDate.getMonth() + 1;
   const year = selectedDate.getFullYear();
 
+  // --- STATE DO MODAL DE DETALHES ---
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedDetail, setSelectedDetail] = useState<{
+      name: string;
+      role: string;
+      calculation: PayrollCalculationResult;
+  } | null>(null);
+
   // --- FILTRO DE FUNCIONÁRIOS (Por Unidade) ---
   const filteredStaff = useMemo(() => {
     return staff.filter(s => 
@@ -31,10 +41,9 @@ export const PayrollPage: React.FC = () => {
   }, [staff, selectedBranchId]);
 
   // --- MAPA MESTRE DA FOLHA ---
-  // Combina dados do cadastro (estimativa) com faturas já geradas (realidade)
   const payrollMap = useMemo(() => {
     return filteredStaff.map(employee => {
-      // 1. Procura se já existe fatura de salário para este funcionário nesta competência
+      // 1. Procura se já existe fatura de salário
       const existingInvoice = invoices.find(inv => 
         inv.type === 'expense' &&
         (inv.category === InvoiceCategory.SALARIO || inv.items[0]?.category === InvoiceCategory.SALARIO) &&
@@ -43,15 +52,15 @@ export const PayrollPage: React.FC = () => {
         inv.year === year
       );
 
-      // 2. Calcula estimativa (sempre útil para comparar ou para gerar)
-      const estimate = calculateEstimatedSalary(employee, staffIncidents, month, year);
+      // 2. Calcula estimativa usando a nova lógica granular
+      const calculation = calculateEstimatedSalary(employee, staffIncidents, month, year);
 
       return {
         staff: employee,
         invoice: existingInvoice,
-        estimate: estimate,
+        calculation: calculation, // Novo objeto detalhado
         // Se existe fatura, usa o valor dela. Se não, usa a estimativa líquida.
-        finalAmount: existingInvoice ? existingInvoice.totalAmount : estimate.finalEstimate,
+        finalAmount: existingInvoice ? existingInvoice.totalAmount : calculation.netTotal,
         status: existingInvoice ? existingInvoice.status : 'not_generated'
       };
     });
@@ -81,11 +90,11 @@ export const PayrollPage: React.FC = () => {
 
     payrollMap.forEach(item => {
       if (item.status === 'not_generated') {
-        // Gera fatura usando o hook
+        // Gera fatura usando o total líquido calculado
         generatePayrollInvoice(
           item.staff,
-          item.estimate.finalEstimate,
-          new Date(year, month, 5).toISOString().split('T')[0], // Vencimento dia 5 do mês seguinte
+          item.calculation.netTotal,
+          new Date(year, month, 5).toISOString().split('T')[0],
           `Salário ${month.toString().padStart(2, '0')}/${year}`,
           InvoiceCategory.SALARIO
         );
@@ -98,6 +107,22 @@ export const PayrollPage: React.FC = () => {
         const today = new Date().toISOString().split('T')[0];
         registerPayment(invoiceId, amount / 100, 'transferencia', today, 'Pagamento via Painel RH');
     }
+  };
+
+  const handleOpenDetail = (item: typeof payrollMap[0]) => {
+      setSelectedDetail({
+          name: item.staff.name,
+          role: item.staff.role,
+          calculation: item.calculation
+      });
+      setDetailModalOpen(true);
+  };
+
+  // Helper para somar itens específicos (ex: apenas adicionais que não são salário base)
+  const getAdditionsSum = (items: PayrollLineItem[]) => {
+      return items
+        .filter(i => i.type === 'earning' && i.id !== 'base-salary')
+        .reduce((acc, i) => acc + i.amount, 0);
   };
 
   return (
@@ -181,6 +206,8 @@ export const PayrollPage: React.FC = () => {
               <tbody className="divide-y divide-gray-100">
                   {payrollMap.map((item) => {
                       const isGenerated = item.status !== 'not_generated';
+                      const additions = getAdditionsSum(item.calculation.items);
+                      
                       return (
                           <tr key={item.staff.id} className="hover:bg-gray-50 transition-colors group">
                               <td className="px-6 py-4">
@@ -190,13 +217,13 @@ export const PayrollPage: React.FC = () => {
                                   </div>
                               </td>
                               <td className="px-6 py-4 text-right text-gray-600">
-                                  {formatCurrency(item.estimate.base)}
+                                  {formatCurrency(item.calculation.baseSalary)}
                               </td>
                               <td className="px-6 py-4 text-right text-emerald-600 font-medium">
-                                  + {formatCurrency(item.estimate.insalubrity + item.estimate.totalAdditions)}
+                                  + {formatCurrency(additions)}
                               </td>
                               <td className="px-6 py-4 text-right text-rose-600 font-medium">
-                                  - {formatCurrency(item.estimate.totalDiscounts + item.estimate.inssValue + item.estimate.vtDiscount)}
+                                  - {formatCurrency(item.calculation.discountTotal)}
                               </td>
                               <td className="px-6 py-4 text-right font-bold text-gray-900 bg-blue-50/30">
                                   {formatCurrency(item.finalAmount)}
@@ -208,23 +235,22 @@ export const PayrollPage: React.FC = () => {
                               </td>
                               <td className="px-6 py-4 text-center">
                                   <div className="flex items-center justify-center gap-2">
-                                      {isGenerated ? (
-                                          <>
-                                            <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Ver Holerite">
-                                                <FileText className="w-4 h-4" />
-                                            </button>
-                                            {item.status !== InvoiceStatus.PAID && (
-                                                <button 
-                                                    onClick={() => handleQuickPay(item.invoice!.id, item.finalAmount)}
-                                                    className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" 
-                                                    title="Confirmar Pagamento"
-                                                >
-                                                    <Check className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                          </>
-                                      ) : (
-                                          <span className="text-xs text-gray-400 italic">Gere a folha</span>
+                                      <button 
+                                        onClick={() => handleOpenDetail(item)}
+                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
+                                        title="Ver Holerite Detalhado"
+                                      >
+                                          <FileText className="w-4 h-4" />
+                                      </button>
+                                      
+                                      {isGenerated && item.status !== InvoiceStatus.PAID && (
+                                          <button 
+                                              onClick={() => handleQuickPay(item.invoice!.id, item.finalAmount)}
+                                              className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" 
+                                              title="Confirmar Pagamento"
+                                          >
+                                              <Check className="w-4 h-4" />
+                                          </button>
                                       )}
                                   </div>
                               </td>
@@ -241,6 +267,15 @@ export const PayrollPage: React.FC = () => {
               </div>
           )}
       </div>
+
+      <PayrollDetailModal 
+        isOpen={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        staffName={selectedDetail?.name || ''}
+        staffRole={selectedDetail?.role || ''}
+        competence={selectedDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+        calculation={selectedDetail?.calculation || null}
+      />
 
     </div>
   );

@@ -1,5 +1,6 @@
 
-import { Staff, StaffIncident, TaxTable } from '../types';
+import { Staff, StaffIncident, TaxTable, PayrollLineItem, PayrollCalculationResult } from '../types';
+import { formatCurrency } from '../lib/utils';
 
 // Tabela Padrão 2024 (Valores em Centavos)
 const INSS_TABLE_2024: TaxTable = {
@@ -17,42 +18,40 @@ const INSS_TABLE_2024: TaxTable = {
 export const usePayrollLogic = () => {
 
   /**
-   * Calcula o INSS Progressivo Dinamicamente.
-   * Itera sobre as faixas da tabela fornecida.
+   * Calcula o INSS Progressivo e retorna detalhamento (memória de cálculo).
    */
-  const calculateINSS = (grossSalaryCents: number, table: TaxTable = INSS_TABLE_2024): number => {
-    // 1. Aplica o teto se necessário
-    if (grossSalaryCents > table.ceiling) {
-        // Recalcula o teto exato baseado nas faixas para garantir precisão, 
-        // ou retorna um valor fixo se conhecido. Vamos calcular para ser à prova de futuro.
-        return calculateINSS(table.ceiling, table);
-    }
-
+  const calculateINSS = (grossSalaryCents: number, table: TaxTable = INSS_TABLE_2024): { total: number, breakdown: string[] } => {
     let totalTax = 0;
     let previousLimit = 0;
+    const breakdown: string[] = [];
 
-    for (const bracket of table.brackets) {
-        // Se o salário não atinge nem o início desta faixa (já foi coberto pelas anteriores), paramos.
-        // Mas como iteramos em ordem, verificamos se o salário ultrapassa o limite anterior.
-        if (grossSalaryCents <= previousLimit) break;
+    // O salário de contribuição é limitado ao teto do INSS
+    const contributionBase = Math.min(grossSalaryCents, table.ceiling);
 
-        // Base de cálculo nesta faixa é: O menor valor entre (Salário ou Limite da Faixa) MENOS o limite anterior
-        // Ex: Salário 3000. Faixa 2 (limite 2666).
-        // Faixa 1: min(3000, 1412) - 0 = 1412. Taxa = 1412 * 0.075
-        // Faixa 2: min(3000, 2666) - 1412 = 1254. Taxa = 1254 * 0.09
-        // Faixa 3: min(3000, 4000) - 2666 = 334. Taxa = 334 * 0.12
+    for (let i = 0; i < table.brackets.length; i++) {
+        const bracket = table.brackets[i];
         
+        // Se o salário não atinge nem o início desta faixa, paramos.
+        if (contributionBase <= previousLimit) break;
+
+        // Base de cálculo nesta faixa: 
+        // Minimo entre (Salário ou Limite Faixa) MENOS o limite anterior
         const currentLimit = bracket.limit;
-        const taxableAmountInBracket = Math.min(grossSalaryCents, currentLimit) - previousLimit;
+        const taxableAmountInBracket = Math.min(contributionBase, currentLimit) - previousLimit;
         
         if (taxableAmountInBracket > 0) {
-            totalTax += Math.round(taxableAmountInBracket * bracket.rate);
+            const taxInBracket = Math.round(taxableAmountInBracket * bracket.rate);
+            totalTax += taxInBracket;
+            
+            breakdown.push(
+                `Faixa ${i + 1}: ${formatCurrency(taxableAmountInBracket)} x ${(bracket.rate * 100).toFixed(1)}% = ${formatCurrency(taxInBracket)}`
+            );
         }
 
         previousLimit = currentLimit;
     }
 
-    return totalTax;
+    return { total: totalTax, breakdown };
   };
 
   const calculateEstimatedSalary = (
@@ -61,57 +60,114 @@ export const usePayrollLogic = () => {
     month: number, 
     year: number,
     taxTable: TaxTable = INSS_TABLE_2024
-  ) => {
-    // 1. Proventos Fixos (Valores já vêm em Centavos do DB/Mock)
+  ): PayrollCalculationResult => {
+    const items: PayrollLineItem[] = [];
+
+    // 1. Salário Base (Earning)
     const base = staff.financialInfo?.baseSalary || 0;
+    items.push({
+        id: 'base-salary',
+        label: 'Salário Base',
+        type: 'earning',
+        amount: base
+    });
+
+    // 2. Insalubridade (Earning)
     const level = staff.financialInfo?.insalubridadeLevel || 0;
-    
-    // Insalubridade: Percentual sobre o Mínimo da tabela vigente
-    const insalubrity = Math.round((taxTable.minWage * level) / 100);
+    if (level > 0) {
+        const insalubrityValue = Math.round((taxTable.minWage * level) / 100);
+        items.push({
+            id: 'insalubrity',
+            label: 'Adicional Insalubridade',
+            type: 'earning',
+            amount: insalubrityValue,
+            reference: `${level}%`,
+            description: `Baseado no salário mínimo de ${formatCurrency(taxTable.minWage)}`
+        });
+    }
 
-    // 2. Processar Ocorrências (Variáveis)
-    let totalIncidentDiscounts = 0;
-    let totalAdditions = 0;
-
+    // 3. Ocorrências (Variável)
     const relevantIncidents = incidents.filter(inc => {
       if (!inc.date) return false;
       const [incYear, incMonth] = inc.date.split('-').map(Number);
       return incYear === year && incMonth === month;
     });
 
-    relevantIncidents.forEach(inc => {
+    relevantIncidents.forEach((inc, idx) => {
       const impact = inc.financialImpact || 0;
-      if (impact < 0) {
-        totalIncidentDiscounts += Math.abs(impact);
+      if (impact === 0) return;
+
+      if (impact > 0) {
+        items.push({
+            id: `inc-pos-${idx}`,
+            label: `Bônus/Hora Extra: ${inc.type}`,
+            type: 'earning',
+            amount: impact,
+            description: inc.description
+        });
       } else {
-        totalAdditions += impact;
+        items.push({
+            id: `inc-neg-${idx}`,
+            label: `Desc.: ${inc.type === 'falta' ? 'Faltas/Atrasos' : inc.type}`,
+            type: 'deduction',
+            amount: Math.abs(impact),
+            description: inc.description
+        });
       }
     });
 
-    // 3. Cálculo de Impostos e Benefícios Legais
-    const grossForTax = base + insalubrity + totalAdditions; 
-    const inssValue = calculateINSS(grossForTax, taxTable);
+    // 4. Subtotal Bruto para Cálculo de Impostos
+    const earnings = items.filter(i => i.type === 'earning').reduce((acc, curr) => acc + curr.amount, 0);
+    
+    // 5. INSS (Deduction)
+    const inssResult = calculateINSS(earnings, taxTable);
+    if (inssResult.total > 0) {
+        items.push({
+            id: 'inss',
+            label: 'INSS',
+            type: 'deduction',
+            amount: inssResult.total,
+            reference: 'Progressivo',
+            description: inssResult.breakdown.join(' | ')
+        });
+    }
 
-    // Vale Transporte: 6% do Salário Base
-    const vtDiscount = staff.benefits?.receivesTransportVoucher
-        ? Math.round(base * 0.06)
-        : 0;
+    // 6. Vale Transporte (Deduction)
+    if (staff.benefits?.receivesTransportVoucher) {
+        // Desconto legal padrão de 6% sobre o salário base
+        const vtValue = Math.round(base * 0.06);
+        items.push({
+            id: 'vt',
+            label: 'Vale Transporte',
+            type: 'deduction',
+            amount: vtValue,
+            reference: '6.00%'
+        });
+    }
 
-    // 4. Consolidação
-    const totalDeductions = totalIncidentDiscounts + inssValue + vtDiscount;
+    // 7. Descontos Fixos Personalizados (Ex: Convênio, Empréstimo)
+    staff.financialInfo?.customDeductions?.forEach((ded, idx) => {
+        if (ded.amount > 0) {
+            items.push({
+                id: `custom-ded-${idx}`,
+                label: ded.description || 'Desconto Diverso',
+                type: 'deduction',
+                amount: ded.amount
+            });
+        }
+    });
 
-    // Líquido
-    const finalEstimate = (base + insalubrity + totalAdditions) - totalDeductions;
+    // 8. Totais Finais
+    const grossTotal = items.filter(i => i.type === 'earning').reduce((acc, i) => acc + i.amount, 0);
+    const discountTotal = items.filter(i => i.type === 'deduction').reduce((acc, i) => acc + i.amount, 0);
+    const netTotal = grossTotal - discountTotal;
 
     return {
-      base,
-      insalubrity,
-      totalAdditions,
-      totalDiscounts: totalIncidentDiscounts,
-      inssValue,
-      vtDiscount,
-      finalEstimate,
-      incidentCount: relevantIncidents.length
+      items,
+      grossTotal,
+      discountTotal,
+      netTotal,
+      baseSalary: base
     };
   };
 
