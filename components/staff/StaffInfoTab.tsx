@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Staff, Dependent, StaffIncident } from '../../types';
+import { Staff, Dependent, StaffIncident, InvoiceCategory } from '../../types';
 import { User, Phone, MapPin, Calendar, Briefcase, CreditCard, Building, Edit2, Check, AlertOctagon, Power, RefreshCw, Palmtree, CheckCircle2, Zap, Landmark, Copy, Bus, Utensils, Baby, Trash2, Plus, Shield, Lock, Key, AlertCircle, X, AlertTriangle, Calculator, Send, CheckCircle, Banknote, TrendingDown, TrendingUp, DollarSign, ArrowRight } from 'lucide-react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { formatCPF, formatPhone, stripSpecialChars, formatDateTime, formatCurrency } from '../../lib/utils';
@@ -20,7 +20,7 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, incidents = [
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   
-  // Integração Financeira
+  // Integração Financeira (Global)
   const { invoices, setInvoices } = useData();
   const { generatePayrollInvoice } = useInvoiceLogic({ invoices, onUpdateInvoices: setInvoices });
   
@@ -71,6 +71,12 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, incidents = [
   }, [invoices, staff.id]);
 
   const handleLaunchToFinance = () => {
+      // Validação de Salário Base
+      if (!staff.financialInfo?.baseSalary) {
+        alert("Erro: Defina o salário base antes de lançar.");
+        return;
+      }
+
       if (!invoiceDueDate) return;
       
       const today = new Date();
@@ -81,7 +87,8 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, incidents = [
           staff, 
           payrollPreview.finalEstimate, 
           invoiceDueDate, 
-          description
+          description,
+          InvoiceCategory.SALARIO // Categoria Principal
       );
 
       setShowInvoiceConfirm(false);
@@ -488,9 +495,24 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, incidents = [
                        </div>
                    )}
 
+                   {/* DEDUÇÕES & DESCONTOS */}
+                   {payrollPreview.inssValue > 0 && (
+                       <div className="flex justify-between text-rose-300" title="Desconto de INSS (Estimado 2024)">
+                           <span>INSS (Est.)</span>
+                           <span className="font-bold">- {formatCurrency(payrollPreview.inssValue)}</span>
+                       </div>
+                   )}
+
+                   {payrollPreview.vtDiscount > 0 && (
+                       <div className="flex justify-between text-rose-300" title="6% do Salário Base">
+                           <span>Vale Transporte</span>
+                           <span className="font-bold">- {formatCurrency(payrollPreview.vtDiscount)}</span>
+                       </div>
+                   )}
+
                    {payrollPreview.totalDiscounts > 0 && (
                        <div className="flex justify-between text-rose-300">
-                           <span className="flex items-center gap-1"><TrendingDown className="w-3 h-3"/> Descontos</span>
+                           <span className="flex items-center gap-1"><TrendingDown className="w-3 h-3"/> Ocorrências</span>
                            <span className="font-bold">- {formatCurrency(payrollPreview.totalDiscounts)}</span>
                        </div>
                    )}
@@ -505,7 +527,7 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, incidents = [
             {hasHighDiscounts && (
                 <div className="mt-4 bg-rose-500/20 border border-rose-500/30 rounded-lg p-2 text-xs text-rose-200 flex items-center gap-2 relative z-10 animate-in fade-in">
                     <AlertTriangle className="w-4 h-4 text-rose-400" />
-                    <span>Atenção: Os descontos deste mês ultrapassam 10% da remuneração bruta.</span>
+                    <span>Atenção: Existem descontos por ocorrências registrados neste mês.</span>
                 </div>
             )}
 
@@ -936,80 +958,137 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, incidents = [
             </div>
         </div>
 
-        {/* Seção Bancária (Full Width no Grid, mas internamente dividido) */}
+        {/* Seção Bancária e Salarial */}
         {formData.financialInfo && (
-            <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-3">
+            <div className="lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-3">
                 
-                {/* Coluna Pix */}
-                <div className={`bg-emerald-50/50 border rounded-xl p-6 shadow-sm transition-all ${isEditing ? 'border-emerald-300 ring-2 ring-emerald-100' : 'border-emerald-100'}`}>
-                    <h3 className="font-bold text-emerald-900 mb-4 flex items-center gap-2 border-b border-emerald-100 pb-2">
-                        <Zap className="w-5 h-5 text-emerald-600 fill-emerald-600" /> Pagamento via Pix
+                {/* Bloco de Salário */}
+                <div className={`bg-white border rounded-xl p-6 shadow-sm transition-all ${isEditing ? 'border-indigo-300 ring-4 ring-indigo-50/50' : 'border-gray-100'}`}>
+                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-100 pb-2">
+                        <Banknote className="w-5 h-5 text-indigo-500" /> Remuneração
                     </h3>
-                    <div className="space-y-1">
-                        <EditableRow 
-                            icon={Zap} 
-                            label="Tipo de Chave" 
-                            value={formData.financialInfo.bankInfo.pixKeyType} 
-                            section="financialInfo" 
-                            field="bankInfo" 
-                            nestedField="pixKeyType"
-                            type="select"
-                            options={['cpf', 'telefone', 'email', 'aleatoria', 'outra']}
-                        />
-                        
-                        {/* Linha Customizada para Chave Pix com Botão de Copiar */}
-                        <div className="flex items-center justify-between py-3 border-b border-emerald-100 last:border-0 min-h-[48px]">
-                            <span className="text-gray-500 text-sm flex items-center gap-2 w-1/3">
-                                <Check className="w-4 h-4 text-gray-400 flex-shrink-0"/> Chave Pix
-                            </span>
-                            <div className="w-2/3 flex items-center gap-2 justify-end">
-                                {isEditing ? (
-                                    <>
-                                        <input
-                                            className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none text-right"
-                                            value={formData.financialInfo?.bankInfo?.pixKey || ''}
-                                            onChange={(e) => handleInputChange('financialInfo', 'bankInfo', e.target.value, 'pixKey')}
-                                        />
-                                        <button
-                                            onClick={handleCopyPixKey}
-                                            type="button"
-                                            title="Copiar do Cadastro"
-                                            className="p-2 bg-emerald-200 text-emerald-800 rounded-lg hover:bg-emerald-300 transition-colors shadow-sm"
-                                        >
-                                            <Copy className="w-4 h-4" />
-                                        </button>
-                                    </>
-                                ) : (
-                                    <span className="font-semibold text-gray-900 text-sm break-all flex-1 text-right">
-                                        {formData.financialInfo?.bankInfo?.pixKey || '-'}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-1">
+                            {/* CAMPO DE SALÁRIO BASE */}
+                            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                                <span className="text-gray-500 text-sm flex items-center gap-2">
+                                    <DollarSign className="w-4 h-4 text-gray-400"/> Salário Base
+                                </span>
+                                <div className="w-2/3 text-right">
+                                    {isEditing ? (
+                                    <input 
+                                        type="number"
+                                        className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white text-right font-bold text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder="0.00"
+                                        value={formData.financialInfo?.baseSalary}
+                                        onChange={(e) => handleInputChange('financialInfo', 'baseSalary', parseFloat(e.target.value))}
+                                    />
+                                    ) : (
+                                    <span className="font-bold text-gray-900">
+                                        {formData.financialInfo?.baseSalary ? `R$ ${formData.financialInfo.baseSalary.toFixed(2)}` : '-'}
                                     </span>
-                                )}
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* CAMPO DE INSALUBRIDADE (NÍVEL) */}
+                            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                                <span className="text-gray-500 text-sm flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-gray-400"/> Nível Insalubridade
+                                </span>
+                                <div className="w-2/3 text-right">
+                                    {isEditing ? (
+                                    <select 
+                                        className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white text-right focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={formData.financialInfo?.insalubridadeLevel}
+                                        onChange={(e) => handleInputChange('financialInfo', 'insalubridadeLevel', parseInt(e.target.value))}
+                                    >
+                                        <option value={0}>Isento (0%)</option>
+                                        <option value={20}>Médio (20%)</option>
+                                        <option value={40}>Máximo (40%)</option>
+                                    </select>
+                                    ) : (
+                                    <span className="font-bold text-gray-900">
+                                        {formData.financialInfo?.insalubridadeLevel}%
+                                    </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                        
-                        {/* Alerta de Divergência de Titularidade */}
-                        {isPixMismatch && isEditing && (
-                            <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 flex items-start gap-1.5 leading-tight animate-in fade-in">
-                                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                                <span><strong>Atenção:</strong> Esta chave Pix não pertence ao CPF do titular do cadastro.</span>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Coluna Pix */}
+                    <div className={`bg-emerald-50/50 border rounded-xl p-6 shadow-sm transition-all ${isEditing ? 'border-emerald-300 ring-2 ring-emerald-100' : 'border-emerald-100'}`}>
+                        <h3 className="font-bold text-emerald-900 mb-4 flex items-center gap-2 border-b border-emerald-100 pb-2">
+                            <Zap className="w-5 h-5 text-emerald-600 fill-emerald-600" /> Pagamento via Pix
+                        </h3>
+                        <div className="space-y-1">
+                            <EditableRow 
+                                icon={Zap} 
+                                label="Tipo de Chave" 
+                                value={formData.financialInfo.bankInfo.pixKeyType} 
+                                section="financialInfo" 
+                                field="bankInfo" 
+                                nestedField="pixKeyType"
+                                type="select"
+                                options={['cpf', 'telefone', 'email', 'aleatoria', 'outra']}
+                            />
+                            
+                            {/* Linha Customizada para Chave Pix com Botão de Copiar */}
+                            <div className="flex items-center justify-between py-3 border-b border-emerald-100 last:border-0 min-h-[48px]">
+                                <span className="text-gray-500 text-sm flex items-center gap-2 w-1/3">
+                                    <Check className="w-4 h-4 text-gray-400 flex-shrink-0"/> Chave Pix
+                                </span>
+                                <div className="w-2/3 flex items-center gap-2 justify-end">
+                                    {isEditing ? (
+                                        <>
+                                            <input
+                                                className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none text-right"
+                                                value={formData.financialInfo?.bankInfo?.pixKey || ''}
+                                                onChange={(e) => handleInputChange('financialInfo', 'bankInfo', e.target.value, 'pixKey')}
+                                            />
+                                            <button
+                                                onClick={handleCopyPixKey}
+                                                type="button"
+                                                title="Copiar do Cadastro"
+                                                className="p-2 bg-emerald-200 text-emerald-800 rounded-lg hover:bg-emerald-300 transition-colors shadow-sm"
+                                            >
+                                                <Copy className="w-4 h-4" />
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <span className="font-semibold text-gray-900 text-sm break-all flex-1 text-right">
+                                            {formData.financialInfo?.bankInfo?.pixKey || '-'}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
-                        )}
+                            
+                            {/* Alerta de Divergência de Titularidade */}
+                            {isPixMismatch && isEditing && (
+                                <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 flex items-start gap-1.5 leading-tight animate-in fade-in">
+                                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                    <span><strong>Atenção:</strong> Esta chave Pix não pertence ao CPF do titular do cadastro.</span>
+                                </div>
+                            )}
 
+                        </div>
+                    </div>
+
+                    {/* Coluna Banco Tradicional */}
+                    <div className={`bg-white border rounded-xl p-6 shadow-sm transition-all ${isEditing ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-100'}`}>
+                        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-100 pb-2">
+                            <Landmark className="w-5 h-5 text-blue-600" /> Transferência Tradicional
+                        </h3>
+                        <div className="space-y-1">
+                            <EditableRow icon={Building} label="Banco" value={formData.financialInfo.bankInfo.banco} section="financialInfo" field="bankInfo" nestedField="banco" />
+                            <EditableRow icon={CreditCard} label="Agência" value={formData.financialInfo.bankInfo.agencia} section="financialInfo" field="bankInfo" nestedField="agencia" />
+                            <EditableRow icon={CreditCard} label="Conta" value={formData.financialInfo.bankInfo.conta} section="financialInfo" field="bankInfo" nestedField="conta" />
+                        </div>
                     </div>
                 </div>
-
-                {/* Coluna Banco Tradicional */}
-                <div className={`bg-white border rounded-xl p-6 shadow-sm transition-all ${isEditing ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-100'}`}>
-                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b border-gray-100 pb-2">
-                        <Landmark className="w-5 h-5 text-blue-600" /> Transferência Tradicional
-                    </h3>
-                    <div className="space-y-1">
-                        <EditableRow icon={Building} label="Banco" value={formData.financialInfo.bankInfo.banco} section="financialInfo" field="bankInfo" nestedField="banco" />
-                        <EditableRow icon={CreditCard} label="Agência" value={formData.financialInfo.bankInfo.agencia} section="financialInfo" field="bankInfo" nestedField="agencia" />
-                        <EditableRow icon={CreditCard} label="Conta" value={formData.financialInfo.bankInfo.conta} section="financialInfo" field="bankInfo" nestedField="conta" />
-                    </div>
-                </div>
-
             </div>
         )}
 

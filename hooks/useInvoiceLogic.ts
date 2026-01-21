@@ -145,35 +145,40 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
   /**
    * Gera uma despesa de folha de pagamento vinculada ao funcionário.
    */
-  const generatePayrollInvoice = (staff: Staff, amount: number, dueDate: string, description: string) => {
-    const newId = `inv-payroll-${Date.now()}`;
-    const dateObj = new Date(dueDate);
-    const month = dateObj.getMonth() + 1;
-    const year = dateObj.getFullYear();
+  const generatePayrollInvoice = (
+    staff: Staff, 
+    amount: number, 
+    dueDate: string, 
+    description: string,
+    category: InvoiceCategory | string = InvoiceCategory.SALARIO
+  ) => {
+    // Criação do ID único
+    const newInvoiceId = `inv-pay-${staff.id}-${Date.now()}`;
+    const today = new Date();
 
     const newInvoice: Invoice = {
-      id: newId,
-      type: 'expense',
+      id: newInvoiceId,
+      type: 'expense', // É uma saída
       branchId: staff.branchId,
-      staffId: staff.id, // Vínculo com RH
-      residentId: undefined,
-      month: month,
-      year: year,
-      status: InvoiceStatus.PENDING,
+      staffId: staff.id, // Vincula ao funcionário (importante!)
+      month: today.getMonth() + 1, // Mês de competência (geração)
+      year: today.getFullYear(),
+      status: InvoiceStatus.PENDING, // Começa como Pendente (A Pagar)
       dueDate: dueDate,
       totalAmount: amount,
       supplier: staff.name, // Nome do funcionário como "Fornecedor"
       items: [{
-        id: `item-${newId}`,
-        invoiceId: newId,
+        id: `item-${newInvoiceId}`,
+        invoiceId: newInvoiceId,
         description: description,
         amount: amount,
-        category: InvoiceCategory.SALARIO,
+        category: category, // Usa a categoria passada (ex: SALARIO)
         date: dueDate
       }],
       payments: []
     };
 
+    // ATENÇÃO: Atualiza a lista global
     onUpdateInvoices([...invoices, newInvoice]);
   };
 
