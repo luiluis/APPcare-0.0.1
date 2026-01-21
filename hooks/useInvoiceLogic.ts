@@ -1,7 +1,6 @@
 
-import { useState } from 'react';
-import { Invoice, InvoiceItem, InvoiceStatus, InvoiceCategory, CreateInvoiceDTO, QuickConsumeDTO, PaymentConfirmDTO, InvoicePayment, Staff } from '../types';
-import { getLocalISOString } from '../lib/utils';
+import { Invoice, InvoiceItem, InvoiceStatus, InvoiceCategory, CreateInvoiceDTO, QuickConsumeDTO } from '../types';
+import { toCents, parseDateToUTC, sanitizeInput } from '../lib/utils';
 
 interface UseInvoiceLogicProps {
   invoices: Invoice[];
@@ -10,74 +9,81 @@ interface UseInvoiceLogicProps {
 
 export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicProps) => {
   
-  // --- Actions ---
+  // --- Core Invoice Actions (CRUD) ---
 
   const createRecurringInvoices = (data: CreateInvoiceDTO) => {
-    // Conversão Explícita de String para Number
-    const amountFloat = parseFloat(data.amount.replace(',', '.'));
+    // CONVERSÃO CRÍTICA: String Input -> Centavos
+    const amountCents = toCents(data.amount);
 
-    if (isNaN(amountFloat)) {
-        console.error("Valor inválido fornecido para criação de fatura");
-        return;
+    if (amountCents === 0 && parseFloat(data.amount) !== 0) {
+        console.error("Valor inválido fornecido (zero ou NaN)");
     }
 
-    const newInvoices: Invoice[] = [];
-    const loopCount = data.isRecurring ? (data.recurrenceCount || 1) : 1;
-    let baseDate = new Date(data.dueDate);
-    
-    // Mock de upload de arquivo (em produção, isso iria para um S3/Supabase Storage)
+    // Sanitização para prevenir XSS
+    const sanitizedDesc = sanitizeInput(data.description);
+    const sanitizedSupplier = sanitizeInput(data.supplier);
+
+    // FIX: Data segura em UTC para evitar deslocamento de dia
+    const baseDate = parseDateToUTC(data.dueDate);
+    const year = baseDate.getUTCFullYear();
+    const month = baseDate.getUTCMonth() + 1;
+    const dueDateString = baseDate.toISOString().split('T')[0]; 
+    const id = `inv-gen-${Date.now()}`;
+
+    // NOTA TÉCNICA: Em produção, o URL.createObjectURL deve ser gerenciado com cuidado
+    // ou substituído por URLs de storage reais. Aqui, confiamos que o componente pai
+    // lidará com o ciclo de vida do arquivo se necessário, ou que o app é recarregado.
     const mockAttachmentUrl = data.attachment ? URL.createObjectURL(data.attachment) : undefined;
 
-    for (let i = 0; i < loopCount; i++) {
-      const currentDate = new Date(baseDate);
-      currentDate.setMonth(baseDate.getMonth() + i);
-      
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth() + 1;
-      const id = `inv-gen-${Date.now()}-${i}`;
-      // Fix: Adjust due date string manually to avoid timezone shifts
-      const dueDateString = currentDate.toISOString().split('T')[0]; 
+    // Objeto de Fatura Única com Definição de Recorrência
+    const newInvoice: Invoice = {
+      id: id,
+      type: data.type,
+      residentId: data.type === 'income' ? data.residentId : undefined,
+      branchId: data.branchId,
+      month: month,
+      year: year,
+      status: data.status === InvoiceStatus.PAID ? InvoiceStatus.PAID : InvoiceStatus.PENDING,
+      dueDate: dueDateString,
+      totalAmount: amountCents,
+      items: [{
+        id: `item-${id}`,
+        invoiceId: id,
+        description: sanitizedDesc + (data.isRecurring ? ' (Recorrente)' : ''),
+        amount: amountCents,
+        category: data.category as InvoiceCategory,
+        date: dueDateString
+      }],
+      attachmentUrl: mockAttachmentUrl,
+      supplier: sanitizedSupplier,
+      payments: [],
+      // Nova estrutura de metadados
+      recurrence: data.isRecurring ? {
+          active: true,
+          frequency: 'monthly',
+          currentInstallment: 1,
+          totalInstallments: data.recurrenceCount > 1 ? data.recurrenceCount : undefined, 
+      } : undefined
+    };
 
-      newInvoices.push({
-        id: id,
-        type: data.type,
-        residentId: data.type === 'income' ? data.residentId : undefined,
-        branchId: data.branchId,
-        month: month,
-        year: year,
-        status: (data.status === InvoiceStatus.PAID && i === 0) ? InvoiceStatus.PAID : InvoiceStatus.PENDING,
-        dueDate: dueDateString,
-        totalAmount: amountFloat,
-        items: [{
-          id: `item-${id}`,
-          invoiceId: id,
-          description: data.description + (loopCount > 1 ? ` (${i+1}/${loopCount})` : ''),
-          amount: amountFloat,
-          category: data.category as InvoiceCategory,
-          date: dueDateString
-        }],
-        attachmentUrl: mockAttachmentUrl,
-        supplier: data.supplier, // Mapeando fornecedor
-        payments: [] // Inicializado vazio
-      });
-    }
-
-    onUpdateInvoices([...invoices, ...newInvoices]);
+    onUpdateInvoices([...invoices, newInvoice]);
   };
 
   const addQuickConsume = (data: QuickConsumeDTO) => {
-    const amountFloat = parseFloat(data.amount.replace(',', '.'));
+    // Conversão para Centavos
+    const amountCents = toCents(data.amount);
 
-    if (isNaN(amountFloat)) {
-        console.error("Valor inválido fornecido para consumo rápido");
+    if (amountCents <= 0) {
+        console.error("Valor inválido");
         return;
     }
 
-    const dateObj = new Date(data.date);
-    const month = dateObj.getMonth() + 1;
-    const year = dateObj.getFullYear();
+    const sanitizedDesc = sanitizeInput(data.description);
+    const dateObj = parseDateToUTC(data.date);
+    const month = dateObj.getUTCMonth() + 1;
+    const year = dateObj.getUTCFullYear();
 
-    // Lógica Inteligente: Busca fatura aberta
+    // Lógica Inteligente: Busca fatura aberta do mês para agrupar
     const targetInvoiceIndex = invoices.findIndex(inv => 
       inv.type === 'income' &&
       inv.residentId === data.residentId &&
@@ -87,8 +93,6 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
     );
 
     let updatedInvoices = [...invoices];
-    
-    // Mock URL se houver anexo (apenas para o item, embora o ERP mostre na fatura)
     const mockAttachmentUrl = data.attachment ? URL.createObjectURL(data.attachment) : undefined;
 
     if (targetInvoiceIndex >= 0) {
@@ -97,8 +101,8 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
       const newItem: InvoiceItem = {
         id: `item-ext-${Date.now()}`,
         invoiceId: targetInvoice.id,
-        description: data.description,
-        amount: amountFloat,
+        description: sanitizedDesc,
+        amount: amountCents, // Inteiro
         category: data.category as InvoiceCategory,
         date: data.date
       };
@@ -106,14 +110,16 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
       updatedInvoices[targetInvoiceIndex] = {
         ...targetInvoice,
         items: [...targetInvoice.items, newItem],
-        totalAmount: targetInvoice.totalAmount + amountFloat,
-        attachmentUrl: targetInvoice.attachmentUrl || mockAttachmentUrl // Mantém o antigo ou usa o novo
+        totalAmount: targetInvoice.totalAmount + amountCents, // Soma de inteiros
+        attachmentUrl: targetInvoice.attachmentUrl || mockAttachmentUrl
       };
     } else {
       // Create new invoice for the consumption
       const newInvoiceId = `inv-cons-${Date.now()}`;
-      // Vence dia 05 do mês seguinte se criado hoje
-      const nextMonth = new Date(year, month, 5);
+      
+      // Cria vencimento seguro para o próximo mês (dia 5)
+      // Usamos UTC para garantir consistência
+      const nextMonth = new Date(Date.UTC(year, month, 5));
       
       const newInvoice: Invoice = {
         id: newInvoiceId,
@@ -124,62 +130,22 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
         year: year,
         status: InvoiceStatus.PENDING,
         dueDate: nextMonth.toISOString().split('T')[0],
-        totalAmount: amountFloat,
+        totalAmount: amountCents,
         items: [{
           id: `item-ext-${Date.now()}`,
           invoiceId: newInvoiceId,
-          description: data.description,
-          amount: amountFloat,
+          description: sanitizedDesc,
+          amount: amountCents,
           category: data.category as InvoiceCategory,
           date: data.date
         }],
         attachmentUrl: mockAttachmentUrl,
-        payments: [] // Inicializado vazio
+        payments: []
       };
       updatedInvoices.push(newInvoice);
     }
 
     onUpdateInvoices(updatedInvoices);
-  };
-
-  /**
-   * Gera uma despesa de folha de pagamento vinculada ao funcionário.
-   */
-  const generatePayrollInvoice = (
-    staff: Staff, 
-    amount: number, 
-    dueDate: string, 
-    description: string,
-    category: InvoiceCategory | string = InvoiceCategory.SALARIO
-  ) => {
-    // Criação do ID único
-    const newInvoiceId = `inv-pay-${staff.id}-${Date.now()}`;
-    const today = new Date();
-
-    const newInvoice: Invoice = {
-      id: newInvoiceId,
-      type: 'expense', // É uma saída
-      branchId: staff.branchId,
-      staffId: staff.id, // Vincula ao funcionário (importante!)
-      month: today.getMonth() + 1, // Mês de competência (geração)
-      year: today.getFullYear(),
-      status: InvoiceStatus.PENDING, // Começa como Pendente (A Pagar)
-      dueDate: dueDate,
-      totalAmount: amount,
-      supplier: staff.name, // Nome do funcionário como "Fornecedor"
-      items: [{
-        id: `item-${newInvoiceId}`,
-        invoiceId: newInvoiceId,
-        description: description,
-        amount: amount,
-        category: category, // Usa a categoria passada (ex: SALARIO)
-        date: dueDate
-      }],
-      payments: []
-    };
-
-    // ATENÇÃO: Atualiza a lista global
-    onUpdateInvoices([...invoices, newInvoice]);
   };
 
   const updateInvoiceStatus = (invoiceId: string, newStatus: InvoiceStatus | string) => {
@@ -189,91 +155,9 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
     onUpdateInvoices(updatedInvoices);
   };
 
-  /**
-   * Registra um pagamento (parcial ou total) em uma fatura.
-   * Calcula automaticamente o saldo e atualiza o status.
-   */
-  const registerPayment = (invoiceId: string, amount: number, method: string, date: string, notes?: string) => {
-    const updatedInvoices = invoices.map(inv => {
-      if (inv.id !== invoiceId) return inv;
-
-      const newPayment: InvoicePayment = {
-        id: `pay-${Date.now()}`,
-        amount: amount,
-        date: date,
-        method: method,
-        notes: notes
-      };
-
-      const currentPayments = inv.payments || [];
-      const updatedPayments = [...currentPayments, newPayment];
-      
-      // Recalcula o total pago
-      const totalPaid = updatedPayments.reduce((acc, curr) => acc + curr.amount, 0);
-      
-      // Verifica se quitou (com margem de segurança para float points)
-      const isFullyPaid = totalPaid >= (inv.totalAmount - 0.01);
-
-      return {
-        ...inv,
-        payments: updatedPayments,
-        paidAmount: totalPaid,
-        status: isFullyPaid ? InvoiceStatus.PAID : InvoiceStatus.PENDING,
-        // Atualiza campos legados para facilidade de visualização na tabela principal
-        paymentDate: date,
-        paymentMethod: method
-      };
-    });
-    
-    onUpdateInvoices(updatedInvoices);
-  };
-
-  /**
-   * Baixa em lote (compatibilidade com dashboard).
-   * Registra o valor restante integral como pagamento.
-   */
-  const markAsPaidBatch = (invoiceIds: string[], paymentDetails: PaymentConfirmDTO) => {
-    const updatedInvoices = invoices.map(inv => {
-      if (!invoiceIds.includes(inv.id)) return inv;
-
-      // Calcula quanto falta pagar
-      const alreadyPaid = (inv.payments || []).reduce((acc, p) => acc + p.amount, 0);
-      const remainingAmount = inv.totalAmount - alreadyPaid;
-
-      if (remainingAmount <= 0) {
-          // Se já está pago, apenas garante o status (idempotência)
-          return { ...inv, status: InvoiceStatus.PAID };
-      }
-
-      const newPayment: InvoicePayment = {
-        id: `pay-batch-${Date.now()}-${inv.id}`,
-        amount: remainingAmount,
-        date: paymentDetails.paymentDate,
-        method: paymentDetails.paymentMethod,
-        notes: 'Baixa em lote'
-      };
-
-      const updatedPayments = [...(inv.payments || []), newPayment];
-
-      return { 
-        ...inv, 
-        status: InvoiceStatus.PAID,
-        payments: updatedPayments,
-        paidAmount: inv.totalAmount, // Agora está 100% pago
-        paymentDate: paymentDetails.paymentDate,
-        paymentMethod: paymentDetails.paymentMethod,
-        paymentAccount: paymentDetails.paymentAccount
-      };
-    });
-    onUpdateInvoices(updatedInvoices);
-  };
-
   return {
     createRecurringInvoices,
     addQuickConsume,
-    generatePayrollInvoice,
-    updateInvoiceStatus,
-    markAsPaidBatch,
-    registerPayment
+    updateInvoiceStatus
   };
 };

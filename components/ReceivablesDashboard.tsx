@@ -9,6 +9,7 @@ import { Invoice, Resident, InvoiceStatus, InvoiceCategory, PaymentConfirmDTO } 
 import { BRANCHES } from '../constants';
 import { formatCurrency, getFirstDayOfMonth, getLastDayOfMonth, formatDateBr } from '../lib/utils';
 import { useInvoiceLogic } from '../hooks/useInvoiceLogic';
+import { usePaymentProcessing } from '../hooks/usePaymentProcessing';
 import { NewInvoiceModal } from './modals/NewInvoiceModal';
 import { InvoiceDetailsModal } from './modals/InvoiceDetailsModal';
 import { PaymentModal } from './modals/PaymentModal';
@@ -42,7 +43,13 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
     paymentTargetIds: [] as string[]
   });
 
-  const { createRecurringInvoices, addQuickConsume, updateInvoiceStatus, markAsPaidBatch, registerPayment } = useInvoiceLogic({
+  // Hooks Separados (SRP)
+  const { createRecurringInvoices, addQuickConsume } = useInvoiceLogic({
+    invoices: allInvoices,
+    onUpdateInvoices
+  });
+
+  const { registerPayment, markAsPaidBatch } = usePaymentProcessing({
     invoices: allInvoices,
     onUpdateInvoices
   });
@@ -151,8 +158,8 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
       inv.type,
       inv.dueDate,
       inv.items[0].description,
-      inv.totalAmount.toFixed(2),
-      (inv.paidAmount || 0).toFixed(2),
+      (inv.totalAmount / 100).toFixed(2), // Exibe em reais no CSV
+      ((inv.paidAmount || 0) / 100).toFixed(2),
       inv.status
     ]);
 

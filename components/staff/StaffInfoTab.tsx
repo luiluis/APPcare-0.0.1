@@ -6,7 +6,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { formatCPF, formatPhone, stripSpecialChars, formatDateTime, formatCurrency } from '../../lib/utils';
 import { usePayrollLogic } from '../../hooks/usePayrollLogic';
 import { useData } from '../../contexts/DataContext';
-import { useInvoiceLogic } from '../../hooks/useInvoiceLogic';
+import { usePayrollGeneration } from '../../hooks/usePayrollGeneration';
 
 interface StaffInfoTabProps {
   staff: Staff;
@@ -22,7 +22,7 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, incidents = [
   
   // Integração Financeira (Global)
   const { invoices, setInvoices } = useData();
-  const { generatePayrollInvoice } = useInvoiceLogic({ invoices, onUpdateInvoices: setInvoices });
+  const { generatePayrollInvoice } = usePayrollGeneration({ invoices, onUpdateInvoices: setInvoices });
   
   // Lógica de Prévia de Folha
   const { calculateEstimatedSalary } = usePayrollLogic();

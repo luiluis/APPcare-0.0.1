@@ -17,6 +17,7 @@ import {
   MedicationLog, IncidentReport, StaffDocument, StaffIncident, StaffDocumentCategory, HRAlert
 } from '../types.ts';
 import { storageService } from './storageService.ts';
+import { sanitizeInput } from '../lib/utils.ts';
 
 /**
  * ESTADO LOCAL (Simulando tabelas do Banco de Dados)
@@ -166,6 +167,7 @@ export const dataService = {
   addIncident: async (incident: Omit<IncidentReport, 'id'>): Promise<IncidentReport> => {
     const newIncident: IncidentReport = {
       ...incident,
+      description: sanitizeInput(incident.description), // XSS Protection
       id: `inc-${Date.now()}`
     };
     db_incidents.push(newIncident);
@@ -175,6 +177,7 @@ export const dataService = {
   registerMedicationAdmin: async (logData: Omit<MedicationLog, 'id'>): Promise<MedicationLog> => {
     const newLog: MedicationLog = {
       ...logData,
+      notes: sanitizeInput(logData.notes),
       id: `mlog-${Date.now()}`
     };
 
@@ -202,8 +205,6 @@ export const dataService = {
             status: (item.quantity - 1) <= item.minThreshold ? 'low' : 'ok'
           };
           console.log(`[DataService] Baixa automática no estoque: ${item.name} para residente ${prescription.residentId}. Nova qtd: ${db_stock[stockItemIndex].quantity}`);
-        } else {
-          console.warn(`[DataService] Estoque de ${item.name} está zerado. Registro feito mas sem baixa.`);
         }
       }
     }
@@ -217,7 +218,7 @@ export const dataService = {
     const newDoc: ResidentDocument = {
       id: `doc-${Date.now()}`,
       residentId,
-      title,
+      title: sanitizeInput(title),
       category,
       url: fileUrl,
       type: file.type.startsWith('image/') ? 'image' : 'pdf',
@@ -235,7 +236,12 @@ export const dataService = {
   // Prescrições
   addPrescription: async (prescription: Omit<Prescription, 'id'>): Promise<Prescription> => {
     const newId = `presc-${Date.now()}`;
-    const data: Prescription = { ...prescription, id: newId };
+    const data: Prescription = { 
+        ...prescription, 
+        medication: sanitizeInput(prescription.medication),
+        instructions: sanitizeInput(prescription.instructions),
+        id: newId 
+    };
     db_prescriptions.push(data);
     return simulateNetwork(data);
   },
@@ -243,6 +249,11 @@ export const dataService = {
   updatePrescription: async (id: string, updates: Partial<Prescription>): Promise<Prescription> => {
     const index = db_prescriptions.findIndex(p => p.id === id);
     if (index === -1) throw new Error("Não encontrada.");
+    
+    // Sanitize if updating text fields
+    if (updates.medication) updates.medication = sanitizeInput(updates.medication);
+    if (updates.instructions) updates.instructions = sanitizeInput(updates.instructions);
+
     const updated = { ...db_prescriptions[index], ...updates };
     db_prescriptions[index] = updated;
     return simulateNetwork(updated);
@@ -256,45 +267,59 @@ export const dataService = {
   // --- MUTATIONS STAFF (RH) ---
 
   addStaff: async (staffData: Partial<Staff>): Promise<Staff> => {
-    // Valores default caso não venham do modal
-    const defaultPersonalInfo = {
-        cpf: (staffData.personalInfo as any)?.cpf || '',
-        rg: '',
-        birthDate: '',
-        phone: '',
-        email: '',
-        address: '',
-        maritalStatus: 'solteiro',
-        childrenCount: 0
-    };
-    const defaultContractInfo = {
-        admissionDate: new Date().toISOString().split('T')[0],
-        jobTitle: staffData.role || '',
-        department: 'enfermagem',
-        scale: '12x36',
-        workShift: 'diurno'
-    };
-    const defaultFinancialInfo = {
-        baseSalary: 0,
-        insalubridadeLevel: 0,
-        bankInfo: { banco: '', agencia: '', conta: '' }
+    // Definindo estrutura padrão segura com tipagem
+    // Sanitização aplicada nos campos de texto livre
+    
+    const personalInfo = {
+        cpf: sanitizeInput(staffData.personalInfo?.cpf || ''),
+        rg: sanitizeInput(staffData.personalInfo?.rg || ''),
+        birthDate: staffData.personalInfo?.birthDate || '',
+        phone: sanitizeInput(staffData.personalInfo?.phone || ''),
+        email: sanitizeInput(staffData.personalInfo?.email || ''),
+        address: sanitizeInput(staffData.personalInfo?.address || ''),
+        maritalStatus: staffData.personalInfo?.maritalStatus || 'solteiro',
+        childrenCount: staffData.personalInfo?.childrenCount || 0
     };
 
+    const contractInfo = {
+        admissionDate: staffData.contractInfo?.admissionDate || new Date().toISOString().split('T')[0],
+        jobTitle: sanitizeInput(staffData.contractInfo?.jobTitle || staffData.role || ''),
+        department: staffData.contractInfo?.department || 'enfermagem',
+        scale: staffData.contractInfo?.scale || '12x36',
+        workShift: staffData.contractInfo?.workShift || 'diurno'
+    };
+
+    const financialInfo = {
+        baseSalary: staffData.financialInfo?.baseSalary || 0,
+        insalubridadeLevel: (staffData.financialInfo?.insalubridadeLevel || 0) as 0 | 20 | 40,
+        bankInfo: { 
+            banco: sanitizeInput(staffData.financialInfo?.bankInfo?.banco), 
+            agencia: sanitizeInput(staffData.financialInfo?.bankInfo?.agencia), 
+            conta: sanitizeInput(staffData.financialInfo?.bankInfo?.conta) 
+        }
+    };
+
+    // Montagem do objeto final com tipagem estrita
     const newStaff: Staff = {
       id: `stf-${Date.now()}`,
       created_at: new Date().toISOString(),
       active: true,
-      ...staffData, // Espalha os dados recebidos para garantir que contractInfo e personalInfo preenchidos venham
-      
-      name: staffData.name || 'Novo Colaborador',
-      role: staffData.role || 'Cargo não definido',
+      name: sanitizeInput(staffData.name || 'Novo Colaborador'),
+      role: sanitizeInput(staffData.role || 'Cargo não definido'),
       branchId: staffData.branchId || BRANCHES[0].id,
       
-      // Garante que os objetos existam fazendo merge com defaults
-      personalInfo: { ...defaultPersonalInfo, ...staffData.personalInfo } as any,
-      contractInfo: { ...defaultContractInfo, ...staffData.contractInfo } as any,
-      financialInfo: { ...defaultFinancialInfo, ...staffData.financialInfo } as any,
+      // Objetos aninhados garantidos
+      personalInfo: personalInfo,
+      contractInfo: contractInfo,
+      financialInfo: financialInfo,
+      
+      // Opcionais
+      systemAccess: staffData.systemAccess,
+      benefits: staffData.benefits,
+      dependents: staffData.dependents,
+      professionalInfo: staffData.professionalInfo
     };
+
     db_staff.push(newStaff);
     return simulateNetwork(newStaff);
   },
@@ -302,6 +327,7 @@ export const dataService = {
   addStaffIncident: async (incident: Omit<StaffIncident, 'id' | 'createdAt'>): Promise<StaffIncident> => {
     const newIncident: StaffIncident = {
       ...incident,
+      description: sanitizeInput(incident.description),
       id: `sinc-${Date.now()}`,
       createdAt: new Date().toISOString()
     };
@@ -316,7 +342,7 @@ export const dataService = {
     const newDoc: StaffDocument = {
       id: `sdoc-${Date.now()}`,
       staffId,
-      title,
+      title: sanitizeInput(title),
       category,
       url: fileUrl,
       type: file.type.startsWith('image/') ? 'image' : 'pdf',

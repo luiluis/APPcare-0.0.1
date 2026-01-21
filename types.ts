@@ -30,12 +30,26 @@ export interface Contact {
 }
 
 export interface FeeConfig {
-  baseValue: number;          
-  careLevelAdjustment: number; 
-  fixedExtras: number;        
-  discount: number;           
+  baseValue: number;          // Em centavos (R$ 10,00 -> 1000)
+  careLevelAdjustment: number; // Em centavos
+  fixedExtras: number;        // Em centavos
+  discount: number;           // Em centavos
   notes: string;              
   paymentDay: number;         
+}
+
+// --- CONFIGURAÇÃO FISCAL (Payroll) ---
+
+export interface TaxBracket {
+  limit: number; // Teto da faixa em centavos
+  rate: number;  // Alíquota (0.075, 0.09, etc)
+}
+
+export interface TaxTable {
+  year: number;
+  minWage: number; // Salário mínimo em centavos
+  ceiling: number; // Teto do INSS em centavos
+  brackets: TaxBracket[]; // Faixas progressivas
 }
 
 // --- ENTIDADES RELACIONAIS ---
@@ -64,11 +78,11 @@ export interface Resident {
   careLevel: 1 | 2 | 3;
   admissionDate: string;
   feeConfig?: FeeConfig; 
-  medicalRecord?: MedicalRecord; 
-  benefitValue?: number; 
+  benefitValue?: number; // Em centavos
   created_at?: string;
   prescriptions?: Prescription[];
   stock?: StockItem[];
+  medicalRecord?: MedicalRecord;
 }
 
 export interface MedicalRecord {
@@ -188,17 +202,25 @@ export interface InvoiceItem {
   id: string;
   invoiceId: string;
   description: string;
-  amount: number;
+  amount: number; // Em centavos (INTEGER)
   category: InvoiceCategory | string;
   date: string;
 }
 
 export interface InvoicePayment {
   id: string;
-  amount: number;
+  amount: number; // Em centavos (INTEGER)
   date: string;
   method: string;
   notes?: string;
+}
+
+export interface RecurrenceConfig {
+  active: boolean;
+  frequency: 'monthly' | 'yearly';
+  currentInstallment: number;
+  totalInstallments?: number; // Se undefined, é recorrente infinito
+  nextDueDate?: string;
 }
 
 export interface Invoice {
@@ -211,21 +233,22 @@ export interface Invoice {
   year: number;
   status: InvoiceStatus | string; 
   dueDate: string;
-  totalAmount: number;
+  totalAmount: number; // Em centavos (INTEGER)
   items: InvoiceItem[];
   payments: InvoicePayment[];
-  paidAmount?: number;
+  paidAmount?: number; // Em centavos (INTEGER)
   paymentDate?: string;
   paymentMethod?: string;
   paymentAccount?: string;
   attachmentUrl?: string;
   supplier?: string;
+  recurrence?: RecurrenceConfig; // Nova definição de recorrência
 }
 
 export interface FinancialRecord {
   id: string;
   description: string;
-  amount: number;
+  amount: number; // Em centavos
   type: 'income' | 'expense';
   category: string;
   date: string;
@@ -246,7 +269,7 @@ export interface Dependent {
 export interface StaffBenefits {
   receivesTransportVoucher: boolean; // Vale Transporte
   transportVoucherDailyQty?: number;
-  transportVoucherUnitValue?: number;
+  transportVoucherUnitValue?: number; // Em centavos se armazenado, mas no front pode vir como float
   receivesMealVoucher: boolean; // Vale Refeição
 }
 
@@ -292,7 +315,7 @@ export interface Staff {
 
   // Financeiro
   financialInfo?: {
-    baseSalary: number;
+    baseSalary: number; // Em centavos (R$ 2000,00 -> 200000)
     insalubridadeLevel: 0 | 20 | 40;
     bankInfo: {
       banco?: string;
@@ -338,7 +361,7 @@ export interface StaffIncident {
   description: string;
   attachmentUrl?: string;
   createdAt: string;
-  financialImpact?: number;
+  financialImpact?: number; // Em centavos
   impactDescription?: string;
 }
 

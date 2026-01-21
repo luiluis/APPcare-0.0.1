@@ -5,6 +5,32 @@
  */
 
 /**
+ * Sanitiza strings para prevenir XSS básico.
+ * Remove tags HTML e caracteres perigosos.
+ */
+export const sanitizeInput = (str: string | undefined | null): string => {
+  if (!str) return '';
+  return str
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/javascript:/gi, "")
+    .replace(/on\w+=/gi, "")
+    .trim();
+};
+
+/**
+ * Converte uma string YYYY-MM-DD (input date) para um objeto Date UTC (Meio-dia).
+ * Evita problemas de timezone onde o dia volta para o anterior (ex: 2023-10-25 -> 2023-10-24T21:00).
+ */
+export const parseDateToUTC = (dateString: string): Date => {
+  if (!dateString) return new Date();
+  // Assume input YYYY-MM-DD
+  const [year, month, day] = dateString.split('-').map(Number);
+  // Cria data ao meio-dia UTC para segurança contra offsets
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+};
+
+/**
  * Retorna uma string ISO local (YYYY-MM-DD) para inputs de data.
  */
 export const getLocalISOString = (date: Date = new Date()): string => {
@@ -14,7 +40,7 @@ export const getLocalISOString = (date: Date = new Date()): string => {
 
 /**
  * Formata uma data para o padrão brasileiro (DD/MM/YYYY).
- * Aceita ISO strings (UTC ou local).
+ * Força o uso de UTC para garantir que a data exibida seja a data salva.
  */
 export const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return '-';
@@ -26,7 +52,7 @@ export const formatDate = (dateString: string | null | undefined): string => {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
-      timeZone: 'UTC' // Forçamos UTC se a string vier do banco sem hora (YYYY-MM-DD)
+      timeZone: 'UTC' // CRÍTICO: Garante que visualizamos a data do banco sem conversão para local
     }).format(date);
   } catch (e) {
     return '-';
@@ -81,12 +107,52 @@ export const formatTime = (dateString: string | null | undefined): string => {
 export const formatDateBr = formatDate;
 
 /**
- * Formata valores monetários para BRL.
+ * CONVERSÃO MONETÁRIA (INT/CENTS)
+ * ------------------------------------------------------------------
+ * O sistema opera internamente com centavos (inteiros) para evitar
+ * erros de ponto flutuante (ex: 0.1 + 0.2 !== 0.3).
  */
-export const formatCurrency = (val: number | string): string => {
-  const num = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val;
+
+/**
+ * Converte valor (string ou float) para Centavos (Inteiro).
+ * Ex: "10,50" -> 1050 | 10.50 -> 1050
+ */
+export const toCents = (amount: number | string): number => {
+  if (amount === undefined || amount === null) return 0;
+  
+  if (typeof amount === 'string') {
+      // Remove R$, espaços, substitui vírgula por ponto
+      const clean = amount.replace(/[^\d,-]/g, '').replace(',', '.');
+      const floatVal = parseFloat(clean);
+      if (isNaN(floatVal)) return 0;
+      return Math.round(floatVal * 100);
+  }
+  
+  // Se já for número, assume que pode ser float e converte
+  return Math.round(amount * 100);
+};
+
+/**
+ * Converte Centavos para Float (apenas para inputs de formulário).
+ * Ex: 1050 -> 10.50
+ */
+export const fromCents = (cents: number): number => {
+  return cents / 100;
+};
+
+/**
+ * Formata valor em Centavos para BRL.
+ * Ex: 1050 -> R$ 10,50
+ */
+export const formatCurrency = (valInCents: number | string): string => {
+  const num = Number(valInCents);
   if (isNaN(num)) return 'R$ 0,00';
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+  
+  // Divide por 100 pois o input é esperado em centavos
+  return new Intl.NumberFormat('pt-BR', { 
+      style: 'currency', 
+      currency: 'BRL' 
+  }).format(num / 100);
 };
 
 /**

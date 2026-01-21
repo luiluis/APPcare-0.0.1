@@ -6,6 +6,7 @@ export const BRANCHES: Branch[] = [
   { id: 'b2', name: 'Unidade Jardim (Filial)', type: BranchType.FILIAL },
 ];
 
+// Valores monetários multiplicados por 100 para converter em CENTAVOS
 export const MOCK_RESIDENTS: Resident[] = [
   {
     id: 'res-1',
@@ -17,10 +18,10 @@ export const MOCK_RESIDENTS: Resident[] = [
     status: 'Ativo',
     careLevel: 3,
     admissionDate: '2022-10-15', 
-    benefitValue: 5500.00,
+    benefitValue: 550000, // R$ 5.500,00
     feeConfig: {
-      baseValue: 4000.00,
-      careLevelAdjustment: 1500.00,
+      baseValue: 400000, // R$ 4.000,00
+      careLevelAdjustment: 150000, // R$ 1.500,00
       fixedExtras: 0,
       discount: 0,
       notes: 'Valor ajustado conforme IPCA anual em Outubro.',
@@ -52,11 +53,11 @@ export const MOCK_RESIDENTS: Resident[] = [
     status: 'Ativo',
     careLevel: 1,
     admissionDate: '2023-01-10',
-    benefitValue: 3500.00,
+    benefitValue: 350000,
     feeConfig: {
-      baseValue: 3500.00,
+      baseValue: 350000,
       careLevelAdjustment: 0, 
-      fixedExtras: 100.00,
+      fixedExtras: 10000, // R$ 100,00
       discount: 0,
       notes: 'Pagamento via boleto.',
       paymentDay: 10
@@ -85,10 +86,10 @@ export const MOCK_RESIDENTS: Resident[] = [
     status: 'Hospitalizado',
     careLevel: 3,
     admissionDate: '2023-05-20',
-    benefitValue: 6000.00,
+    benefitValue: 600000,
     feeConfig: {
-      baseValue: 4000.00,
-      careLevelAdjustment: 2000.00, 
+      baseValue: 400000,
+      careLevelAdjustment: 200000, 
       fixedExtras: 0,
       discount: 0,
       notes: 'Adicional de Enfermagem 24h incluso.',
@@ -163,10 +164,10 @@ export const MOCK_STAFF: Staff[] = [
         allowed: true,
         accessLevel: 'admin',
         loginEmail: 'ana.souza@appcare.com',
-        lastLogin: '2023-10-25T08:30:00.000Z' // STATUS: ATIVO
+        lastLogin: '2023-10-25T08:30:00.000Z'
     },
     financialInfo: {
-      baseSalary: 4500.00,
+      baseSalary: 450000, // R$ 4.500,00
       insalubridadeLevel: 20,
       bankInfo: {
         banco: 'Itaú (341)',
@@ -179,7 +180,7 @@ export const MOCK_STAFF: Staff[] = [
     benefits: {
         receivesTransportVoucher: true,
         transportVoucherDailyQty: 2,
-        transportVoucherUnitValue: 5.50,
+        transportVoucherUnitValue: 550, // R$ 5,50
         receivesMealVoucher: true
     },
     dependents: [
@@ -219,10 +220,9 @@ export const MOCK_STAFF: Staff[] = [
         allowed: false,
         accessLevel: 'basico',
         loginEmail: ''
-        // lastLogin undefined = nunca acessou (mas está bloqueado, então STATUS: INATIVO)
     },
     financialInfo: {
-      baseSalary: 1800.00,
+      baseSalary: 180000, // R$ 1.800,00
       insalubridadeLevel: 40, 
       bankInfo: {
         banco: 'Banco do Brasil (001)',
@@ -235,8 +235,8 @@ export const MOCK_STAFF: Staff[] = [
     benefits: {
         receivesTransportVoucher: true,
         transportVoucherDailyQty: 2,
-        transportVoucherUnitValue: 6.00, // Tarifa noturna/integração
-        receivesMealVoucher: false // Traz marmita ou come na casa (noturno)
+        transportVoucherUnitValue: 600, 
+        receivesMealVoucher: false 
     },
     professionalInfo: {
       corenState: 'SP'
@@ -269,10 +269,10 @@ export const MOCK_STAFF: Staff[] = [
         allowed: true,
         accessLevel: 'basico',
         loginEmail: 'marta.cozinha@appcare.com',
-        lastLogin: null // STATUS: PENDENTE (Convite enviado, nunca logou)
+        lastLogin: null 
     },
     financialInfo: {
-      baseSalary: 2200.00,
+      baseSalary: 220000, // R$ 2.200,00
       insalubridadeLevel: 0,
       bankInfo: {
         banco: 'Caixa (104)',
@@ -283,7 +283,7 @@ export const MOCK_STAFF: Staff[] = [
       }
     },
     benefits: {
-        receivesTransportVoucher: false, // Mora perto
+        receivesTransportVoucher: false, 
         receivesMealVoucher: true
     }
   }
@@ -292,7 +292,7 @@ export const MOCK_STAFF: Staff[] = [
 export const MOCK_STAFF_DOCUMENTS: StaffDocument[] = [
   {
     id: 'sdoc-1',
-    staffId: 'stf-1', // Ana
+    staffId: 'stf-1', 
     title: 'ASO Periódico 2023',
     category: 'aso',
     url: 'https://placehold.co/400x500?text=ASO+VALIDO',
@@ -302,7 +302,7 @@ export const MOCK_STAFF_DOCUMENTS: StaffDocument[] = [
   },
   {
     id: 'sdoc-2',
-    staffId: 'stf-2', // Carlos
+    staffId: 'stf-2', 
     title: 'Carteira de Vacinação',
     category: 'medical',
     url: 'https://placehold.co/400x500?text=VACINAS',
@@ -314,24 +314,27 @@ export const MOCK_STAFF_DOCUMENTS: StaffDocument[] = [
 export const MOCK_STAFF_INCIDENTS: StaffIncident[] = [
   {
     id: 'sinc-1',
-    staffId: 'stf-3', // Marta
+    staffId: 'stf-3', 
     type: 'atestado',
     date: '2023-09-10',
     description: 'Atestado médico de 2 dias por gripe forte.',
     attachmentUrl: 'https://placehold.co/400x500?text=ATESTADO',
-    createdAt: '2023-09-10'
+    createdAt: '2023-09-10',
+    financialImpact: 0
   },
   {
     id: 'sinc-2',
-    staffId: 'stf-2', // Carlos
+    staffId: 'stf-2', 
     type: 'atraso',
     date: '2023-10-01',
     description: 'Atraso de 40min no início do plantão noturno devido a problemas no transporte.',
-    createdAt: '2023-10-01'
+    createdAt: '2023-10-01',
+    financialImpact: -500 // - R$ 5,00
   }
 ];
 
 export const MOCK_INVOICES: Invoice[] = MOCK_RESIDENTS.map((r, i) => {
+  // Recalcula totais usando centavos
   const baseAmount = r.feeConfig ? (r.feeConfig.baseValue + r.feeConfig.careLevelAdjustment + r.feeConfig.fixedExtras - r.feeConfig.discount) : (r.benefitValue || 0);
   const items: InvoiceItem[] = [{ id: `item-base-${i}`, invoiceId: `inv-${i}`, description: 'Mensalidade Base', amount: baseAmount, category: 'mensalidade', date: '2023-10-01' }];
   const status = i === 0 ? 'pending' : 'paid';
@@ -345,6 +348,6 @@ export const MOCK_INVOICES: Invoice[] = MOCK_RESIDENTS.map((r, i) => {
     dueDate: '2023-10-05', 
     totalAmount: baseAmount, 
     items,
-    payments: [] // Initialized for compatibility
+    payments: [] 
   };
 });

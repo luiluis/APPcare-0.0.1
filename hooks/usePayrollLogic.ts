@@ -1,59 +1,73 @@
-import { Staff, StaffIncident } from '../types';
+
+import { Staff, StaffIncident, TaxTable } from '../types';
+
+// Tabela Padrão 2024 (Valores em Centavos)
+const INSS_TABLE_2024: TaxTable = {
+  year: 2024,
+  minWage: 141200, // R$ 1.412,00
+  ceiling: 778602, // R$ 7.786,02
+  brackets: [
+    { limit: 141200, rate: 0.075 }, // Até 1.412,00
+    { limit: 266668, rate: 0.09 },  // De 1.412,01 até 2.666,68
+    { limit: 400003, rate: 0.12 },  // De 2.666,69 até 4.000,03
+    { limit: 778602, rate: 0.14 },  // De 4.000,04 até 7.786,02
+  ]
+};
 
 export const usePayrollLogic = () => {
-  const MINIMUM_WAGE = 1412; // Salário mínimo base 2024
 
   /**
-   * Calcula o INSS Progressivo (Tabela 2024)
-   * Base de cálculo: Salário Base + Adicionais Tributáveis (Insalubridade entra aqui)
+   * Calcula o INSS Progressivo Dinamicamente.
+   * Itera sobre as faixas da tabela fornecida.
    */
-  const calculateINSS = (grossSalary: number): number => {
-    // Teto do INSS 2024: 7.786,02 -> Teto de contribuição: ~908,85
-    if (grossSalary > 7786.02) return 908.85;
-
-    let tax = 0;
-    
-    // Faixa 1: Até 1.412,00 (7.5%)
-    const f1 = 1412.00;
-    // Faixa 2: 1.412,01 até 2.666,68 (9%)
-    const f2 = 2666.68;
-    // Faixa 3: 2.666,69 até 4.000,03 (12%)
-    const f3 = 4000.03;
-    // Faixa 4: 4.000,04 até 7.786,02 (14%)
-
-    if (grossSalary <= f1) {
-        return grossSalary * 0.075;
-    } else {
-        tax += f1 * 0.075; // 105.90
-        
-        if (grossSalary <= f2) {
-            tax += (grossSalary - f1) * 0.09;
-            return tax;
-        } else {
-            tax += (f2 - f1) * 0.09; // + 112.92
-            
-            if (grossSalary <= f3) {
-                tax += (grossSalary - f2) * 0.12;
-                return tax;
-            } else {
-                tax += (f3 - f2) * 0.12; // + 160.00
-                tax += (grossSalary - f3) * 0.14;
-                return tax;
-            }
-        }
+  const calculateINSS = (grossSalaryCents: number, table: TaxTable = INSS_TABLE_2024): number => {
+    // 1. Aplica o teto se necessário
+    if (grossSalaryCents > table.ceiling) {
+        // Recalcula o teto exato baseado nas faixas para garantir precisão, 
+        // ou retorna um valor fixo se conhecido. Vamos calcular para ser à prova de futuro.
+        return calculateINSS(table.ceiling, table);
     }
+
+    let totalTax = 0;
+    let previousLimit = 0;
+
+    for (const bracket of table.brackets) {
+        // Se o salário não atinge nem o início desta faixa (já foi coberto pelas anteriores), paramos.
+        // Mas como iteramos em ordem, verificamos se o salário ultrapassa o limite anterior.
+        if (grossSalaryCents <= previousLimit) break;
+
+        // Base de cálculo nesta faixa é: O menor valor entre (Salário ou Limite da Faixa) MENOS o limite anterior
+        // Ex: Salário 3000. Faixa 2 (limite 2666).
+        // Faixa 1: min(3000, 1412) - 0 = 1412. Taxa = 1412 * 0.075
+        // Faixa 2: min(3000, 2666) - 1412 = 1254. Taxa = 1254 * 0.09
+        // Faixa 3: min(3000, 4000) - 2666 = 334. Taxa = 334 * 0.12
+        
+        const currentLimit = bracket.limit;
+        const taxableAmountInBracket = Math.min(grossSalaryCents, currentLimit) - previousLimit;
+        
+        if (taxableAmountInBracket > 0) {
+            totalTax += Math.round(taxableAmountInBracket * bracket.rate);
+        }
+
+        previousLimit = currentLimit;
+    }
+
+    return totalTax;
   };
 
   const calculateEstimatedSalary = (
     staff: Staff, 
     incidents: StaffIncident[], 
     month: number, 
-    year: number
+    year: number,
+    taxTable: TaxTable = INSS_TABLE_2024
   ) => {
-    // 1. Proventos Fixos
+    // 1. Proventos Fixos (Valores já vêm em Centavos do DB/Mock)
     const base = staff.financialInfo?.baseSalary || 0;
     const level = staff.financialInfo?.insalubridadeLevel || 0;
-    const insalubrity = (MINIMUM_WAGE * level) / 100;
+    
+    // Insalubridade: Percentual sobre o Mínimo da tabela vigente
+    const insalubrity = Math.round((taxTable.minWage * level) / 100);
 
     // 2. Processar Ocorrências (Variáveis)
     let totalIncidentDiscounts = 0;
@@ -75,17 +89,15 @@ export const usePayrollLogic = () => {
     });
 
     // 3. Cálculo de Impostos e Benefícios Legais
-    // Base para INSS geralmente inclui Insalubridade e Adicionais tributáveis
     const grossForTax = base + insalubrity + totalAdditions; 
-    const inssValue = calculateINSS(grossForTax);
+    const inssValue = calculateINSS(grossForTax, taxTable);
 
-    // Vale Transporte: 6% do Salário Base (limitado ao custo, mas simplificado aqui como 6% fixo se recebe)
+    // Vale Transporte: 6% do Salário Base
     const vtDiscount = staff.benefits?.receivesTransportVoucher
-        ? base * 0.06
+        ? Math.round(base * 0.06)
         : 0;
 
     // 4. Consolidação
-    // Total de descontos visíveis (Ocorrências + Impostos)
     const totalDeductions = totalIncidentDiscounts + inssValue + vtDiscount;
 
     // Líquido
@@ -95,7 +107,7 @@ export const usePayrollLogic = () => {
       base,
       insalubrity,
       totalAdditions,
-      totalDiscounts: totalIncidentDiscounts, // Mantém separado para a UI saber o que é "extra" vs "fixo"
+      totalDiscounts: totalIncidentDiscounts,
       inssValue,
       vtDiscount,
       finalEstimate,
@@ -104,6 +116,7 @@ export const usePayrollLogic = () => {
   };
 
   return {
-    calculateEstimatedSalary
+    calculateEstimatedSalary,
+    INSS_TABLE_2024
   };
 };
