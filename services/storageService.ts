@@ -5,6 +5,9 @@
  * Futuramente, aqui será implementada a lógica do Supabase Storage.
  */
 
+// Rastreamento de URLs criadas para evitar Memory Leaks
+const activeUrls = new Set<string>();
+
 const simulateDelay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const storageService = {
@@ -27,6 +30,9 @@ export const storageService = {
     // Em produção, isso seria a URL retornada pelo Supabase.
     const mockUrl = URL.createObjectURL(file);
     
+    // Registra a URL para limpeza posterior
+    activeUrls.add(mockUrl);
+    
     console.log(`[Storage] Upload concluído. URL gerada: ${mockUrl}`);
     return mockUrl;
   },
@@ -37,5 +43,16 @@ export const storageService = {
   deleteFile: async (path: string): Promise<void> => {
     await simulateDelay(500);
     console.log(`[Storage] Arquivo removido: ${path}`);
+  },
+
+  /**
+   * LIMPEZA DE MEMÓRIA (CRÍTICO)
+   * Deve ser chamado no Logout ou desmontagem do App para revogar URLs
+   * e liberar memória do navegador.
+   */
+  cleanupSession: (): void => {
+    console.log(`[Storage] Limpando ${activeUrls.size} URLs da sessão...`);
+    activeUrls.forEach(url => URL.revokeObjectURL(url));
+    activeUrls.clear();
   }
 };

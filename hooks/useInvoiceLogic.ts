@@ -1,4 +1,5 @@
 
+import { useState, useMemo } from 'react';
 import { Invoice, InvoiceItem, InvoiceStatus, InvoiceCategory, CreateInvoiceDTO, QuickConsumeDTO } from '../types';
 import { toCents, parseDateToUTC, sanitizeInput } from '../lib/utils';
 import { storageService } from '../services/storageService';
@@ -10,6 +11,21 @@ interface UseInvoiceLogicProps {
 
 export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicProps) => {
   
+  // --- Pagination State ---
+  const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  // --- Pagination Logic (Computed) ---
+  const totalPages = Math.ceil(invoices.length / itemsPerPage);
+
+  const paginatedInvoices = useMemo(() => {
+    const startIndex = (page - 1) * itemsPerPage;
+    return invoices.slice(startIndex, startIndex + itemsPerPage);
+  }, [invoices, page, itemsPerPage]);
+
+  const nextPage = () => setPage(prev => Math.min(prev + 1, totalPages));
+  const prevPage = () => setPage(prev => Math.max(prev - 1, 1));
+
   // --- Core Invoice Actions (CRUD) ---
 
   const createRecurringInvoices = async (data: CreateInvoiceDTO) => {
@@ -171,8 +187,18 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
   };
 
   return {
+    // Actions
     createRecurringInvoices,
     addQuickConsume,
-    updateInvoiceStatus
+    updateInvoiceStatus,
+    // Pagination Data & Controls
+    paginatedInvoices,
+    page,
+    setPage,
+    itemsPerPage,
+    setItemsPerPage,
+    totalPages,
+    nextPage,
+    prevPage
   };
 };

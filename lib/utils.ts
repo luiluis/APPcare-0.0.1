@@ -115,14 +115,16 @@ export const formatDateBr = formatDate;
 
 /**
  * Converte valor (string ou float) para Centavos (Inteiro).
- * Ex: "10,50" -> 1050 | 10.50 -> 1050
+ * Ex: "10,50" -> 1050 | 10.50 -> 1050 | "0.33" -> 33
  */
 export const toCents = (amount: number | string): number => {
   if (amount === undefined || amount === null) return 0;
   
   if (typeof amount === 'string') {
-      // Remove R$, espaços, substitui vírgula por ponto
-      const clean = amount.replace(/[^\d,-]/g, '').replace(',', '.');
+      // Remove R$, espaços e caracteres estranhos, mas MANTÉM dígitos, pontos, vírgulas e sinal de menos.
+      // Regex antiga: /[^\d,-]/g (Removia pontos, quebrando inputs como "0.33")
+      const clean = amount.replace(/[^\d.,-]/g, '').replace(',', '.');
+      
       const floatVal = parseFloat(clean);
       if (isNaN(floatVal)) return 0;
       return Math.round(floatVal * 100);
