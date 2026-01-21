@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { Staff, Dependent } from '../../types';
 import { 
-  User, Briefcase, Wallet, ChevronDown, ChevronUp, 
-  Save, Plus, Trash2, CheckCircle2, Building2, Banknote, CreditCard
+  User, Briefcase, ChevronDown, ChevronUp, 
+  Save, Plus, Trash2, CheckCircle2, Building2, CreditCard,
+  Pencil, X, Check
 } from 'lucide-react';
 import { formatCPF, formatPhone, stripSpecialChars } from '../../lib/utils';
 
@@ -13,7 +14,7 @@ interface StaffInfoTabProps {
 }
 
 // Estilos Padronizados
-const inputClass = "w-full border border-gray-300 bg-white rounded-lg px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all disabled:bg-gray-100 disabled:text-gray-500";
+const inputClass = "w-full border border-gray-300 bg-white rounded-lg px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed";
 const labelClass = "text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 block";
 
 // Função Utilitária Interna (Formatação R$)
@@ -50,12 +51,12 @@ const MoneyInput = ({
     <div className={`flex flex-col gap-1 w-full ${className}`}>
       {label && <label className={labelClass}>{label}</label>}
       <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">R$</span>
+        <span className={`absolute left-3 top-1/2 -translate-y-1/2 font-bold text-sm ${disabled ? 'text-gray-400' : 'text-gray-500'}`}>R$</span>
         <input 
           type="text"
           disabled={disabled}
           maxLength={15}
-          className={`w-full border border-gray-300 bg-white rounded-lg pl-10 pr-3 py-2.5 text-sm font-bold text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all disabled:bg-gray-100 disabled:text-gray-500`}
+          className={`w-full border border-gray-300 bg-white rounded-lg pl-10 pr-3 py-2.5 text-sm font-bold text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed`}
           value={formatMoneyInput(valueInCents)}
           onChange={handleMoneyChange}
           placeholder={placeholder}
@@ -68,13 +69,28 @@ const MoneyInput = ({
 export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) => {
   const [formData, setFormData] = useState<Staff>(staff);
   const [activeSection, setActiveSection] = useState<'personal' | 'contract' | 'banking'>('personal');
+  const [isEditing, setIsEditing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  // Atualiza form se a prop mudar (ex: recarregamento externo), mas apenas se não estiver editando
   useEffect(() => {
-    setFormData(staff);
-  }, [staff]);
+    if (!isEditing) {
+      setFormData(staff);
+    }
+  }, [staff, isEditing]);
 
   // --- HANDLERS ---
+  const handleEditToggle = () => {
+    if (isEditing) {
+      // Cancelar: Reverte para os dados originais
+      setFormData(staff);
+      setIsEditing(false);
+    } else {
+      // Entrar no modo edição
+      setIsEditing(true);
+    }
+  };
+
   const handleChange = (section: keyof Staff, field: string, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -101,6 +117,33 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
     });
   };
 
+  // Automação Inteligente de Chave PIX
+  const handlePixTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newType = e.target.value;
+    let newKey = formData.financialInfo?.bankInfo?.pixKey || '';
+
+    // Lógica de preenchimento automático
+    if (newType === 'cpf') {
+      newKey = formData.personalInfo?.cpf || '';
+    } else if (newType === 'email') {
+      newKey = formData.personalInfo?.email || '';
+    } else if (newType === 'telefone') {
+      newKey = formData.personalInfo?.phone || '';
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      financialInfo: {
+        ...prev.financialInfo!,
+        bankInfo: {
+          ...prev.financialInfo!.bankInfo,
+          pixKeyType: newType,
+          pixKey: newKey
+        }
+      }
+    }));
+  };
+
   const handleSave = () => {
     const cleaned = { ...formData };
     if (cleaned.personalInfo) {
@@ -108,6 +151,7 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
       cleaned.personalInfo.phone = stripSpecialChars(cleaned.personalInfo.phone);
     }
     onUpdate(cleaned);
+    setIsEditing(false);
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
@@ -181,10 +225,47 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden animate-in fade-in duration-300 relative mb-10">
       
       {showSuccess && (
-        <div className="absolute top-4 right-4 z-10 bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-sm font-bold animate-in slide-in-from-right fade-in">
+        <div className="absolute top-20 right-4 z-20 bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-sm font-bold animate-in slide-in-from-right fade-in">
           <CheckCircle2 className="w-5 h-5" /> Alterações salvas!
         </div>
       )}
+
+      {/* --- TOOLBAR DE AÇÕES --- */}
+      <div className={`sticky top-0 z-10 px-6 py-4 border-b flex justify-between items-center transition-colors ${isEditing ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'}`}>
+          <div className="flex flex-col">
+              <span className={`text-xs font-bold uppercase tracking-wider ${isEditing ? 'text-amber-700' : 'text-gray-500'}`}>
+                  {isEditing ? 'Modo de Edição' : 'Modo de Visualização'}
+              </span>
+              <p className="text-sm text-gray-600">
+                  {isEditing ? 'Faça as alterações necessárias e salve.' : 'Os dados estão protegidos contra alterações acidentais.'}
+              </p>
+          </div>
+          <div className="flex gap-3">
+              {!isEditing ? (
+                  <button 
+                    onClick={handleEditToggle}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-xl font-bold text-gray-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 transition-all shadow-sm"
+                  >
+                      <Pencil className="w-4 h-4" /> Editar Dados
+                  </button>
+              ) : (
+                  <>
+                    <button 
+                        onClick={handleEditToggle}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-xl font-bold hover:bg-red-50 transition-all shadow-sm"
+                    >
+                        <X className="w-4 h-4" /> Cancelar
+                    </button>
+                    <button 
+                        onClick={handleSave}
+                        className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-md transition-all active:scale-95"
+                    >
+                        <Check className="w-4 h-4" /> Salvar Alterações
+                    </button>
+                  </>
+              )}
+          </div>
+      </div>
 
       {/* --- SEÇÃO 1: DADOS PESSOAIS --- */}
       <div className="border-b border-gray-100">
@@ -195,27 +276,27 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
                 <label className={labelClass}>Nome Completo</label>
-                <input className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                <input disabled={!isEditing} className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
               </div>
               
               <div className="grid grid-cols-2 gap-4 md:col-span-2">
                   <div>
                     <label className={labelClass}>CPF</label>
-                    <input className={inputClass} value={formatCPF(formData.personalInfo?.cpf || '')} onChange={e => handleChange('personalInfo', 'cpf', e.target.value)} placeholder="000.000.000-00" />
+                    <input disabled={!isEditing} className={inputClass} value={formatCPF(formData.personalInfo?.cpf || '')} onChange={e => handleChange('personalInfo', 'cpf', e.target.value)} placeholder="000.000.000-00" />
                   </div>
                   <div>
                     <label className={labelClass}>RG</label>
-                    <input className={inputClass} value={formData.personalInfo?.rg || ''} onChange={e => handleChange('personalInfo', 'rg', e.target.value)} />
+                    <input disabled={!isEditing} className={inputClass} value={formData.personalInfo?.rg || ''} onChange={e => handleChange('personalInfo', 'rg', e.target.value)} />
                   </div>
               </div>
 
               <div>
                 <label className={labelClass}>Data de Nascimento</label>
-                <input type="date" className={inputClass} value={formData.personalInfo?.birthDate || ''} onChange={e => handleChange('personalInfo', 'birthDate', e.target.value)} />
+                <input disabled={!isEditing} type="date" className={inputClass} value={formData.personalInfo?.birthDate || ''} onChange={e => handleChange('personalInfo', 'birthDate', e.target.value)} />
               </div>
               <div>
                 <label className={labelClass}>Estado Civil</label>
-                <select className={inputClass} value={formData.personalInfo?.maritalStatus || 'solteiro'} onChange={e => handleChange('personalInfo', 'maritalStatus', e.target.value)}>
+                <select disabled={!isEditing} className={inputClass} value={formData.personalInfo?.maritalStatus || 'solteiro'} onChange={e => handleChange('personalInfo', 'maritalStatus', e.target.value)}>
                   <option value="solteiro">Solteiro(a)</option>
                   <option value="casado">Casado(a)</option>
                   <option value="divorciado">Divorciado(a)</option>
@@ -226,39 +307,43 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
 
               <div className="md:col-span-2">
                 <label className={labelClass}>Endereço Completo</label>
-                <input className={inputClass} value={formData.personalInfo?.address || ''} onChange={e => handleChange('personalInfo', 'address', e.target.value)} />
+                <input disabled={!isEditing} className={inputClass} value={formData.personalInfo?.address || ''} onChange={e => handleChange('personalInfo', 'address', e.target.value)} />
               </div>
 
               <div className="grid grid-cols-2 gap-4 md:col-span-2">
                   <div>
                     <label className={labelClass}>Telefone / Celular</label>
-                    <input className={inputClass} value={formatPhone(formData.personalInfo?.phone || '')} onChange={e => handleChange('personalInfo', 'phone', e.target.value)} placeholder="(00) 00000-0000" />
+                    <input disabled={!isEditing} className={inputClass} value={formatPhone(formData.personalInfo?.phone || '')} onChange={e => handleChange('personalInfo', 'phone', e.target.value)} placeholder="(00) 00000-0000" />
                   </div>
                   <div>
                     <label className={labelClass}>Email Pessoal</label>
-                    <input type="email" className={inputClass} value={formData.personalInfo?.email || ''} onChange={e => handleChange('personalInfo', 'email', e.target.value)} />
+                    <input disabled={!isEditing} type="email" className={inputClass} value={formData.personalInfo?.email || ''} onChange={e => handleChange('personalInfo', 'email', e.target.value)} />
                   </div>
               </div>
             </div>
 
             {/* Dependentes */}
-            <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <div className={`bg-gray-50 rounded-xl p-5 border border-gray-200 ${!isEditing && 'opacity-80'}`}>
               <div className="flex justify-between items-center mb-4">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Dependentes ({formData.dependents?.length || 0})</label>
-                <button onClick={addDependent} className="text-xs font-bold text-blue-600 bg-white border border-blue-200 px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-blue-50 transition-colors shadow-sm"><Plus className="w-3 h-3"/> Adicionar</button>
+                {isEditing && (
+                    <button onClick={addDependent} className="text-xs font-bold text-blue-600 bg-white border border-blue-200 px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-blue-50 transition-colors shadow-sm"><Plus className="w-3 h-3"/> Adicionar</button>
+                )}
               </div>
               
               <div className="space-y-3">
                 {formData.dependents?.map((dep, idx) => (
                   <div key={idx} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-white p-2 rounded-lg border border-gray-200 shadow-sm">
-                    <input className={`${inputClass} sm:flex-[2] border-0 bg-gray-50 focus:bg-white focus:ring-1`} placeholder="Nome" value={dep.name} onChange={e => updateDependent(idx, 'name', e.target.value)} />
-                    <select className={`${inputClass} sm:flex-1 border-0 bg-gray-50 focus:bg-white focus:ring-1`} value={dep.relation} onChange={e => updateDependent(idx, 'relation', e.target.value)}>
+                    <input disabled={!isEditing} className={`${inputClass} sm:flex-[2] border-0 bg-gray-50 focus:bg-white focus:ring-1`} placeholder="Nome" value={dep.name} onChange={e => updateDependent(idx, 'name', e.target.value)} />
+                    <select disabled={!isEditing} className={`${inputClass} sm:flex-1 border-0 bg-gray-50 focus:bg-white focus:ring-1`} value={dep.relation} onChange={e => updateDependent(idx, 'relation', e.target.value)}>
                       <option value="filho">Filho(a)</option>
                       <option value="conjuge">Cônjuge</option>
                       <option value="outro">Outro</option>
                     </select>
-                    <input type="date" className={`${inputClass} sm:flex-1 border-0 bg-gray-50 focus:bg-white focus:ring-1`} value={dep.birthDate} onChange={e => updateDependent(idx, 'birthDate', e.target.value)} />
-                    <button onClick={() => removeDependent(idx)} className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                    <input disabled={!isEditing} type="date" className={`${inputClass} sm:flex-1 border-0 bg-gray-50 focus:bg-white focus:ring-1`} value={dep.birthDate} onChange={e => updateDependent(idx, 'birthDate', e.target.value)} />
+                    {isEditing && (
+                        <button onClick={() => removeDependent(idx)} className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                    )}
                   </div>
                 ))}
                 {(!formData.dependents || formData.dependents.length === 0) && (
@@ -286,13 +371,13 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                     
                     <div>
                         <label className={labelClass}>Cargo / Função na Carteira</label>
-                        <input className={inputClass} value={formData.contractInfo?.jobTitle || ''} onChange={e => handleChange('contractInfo', 'jobTitle', e.target.value)} />
+                        <input disabled={!isEditing} className={inputClass} value={formData.contractInfo?.jobTitle || ''} onChange={e => handleChange('contractInfo', 'jobTitle', e.target.value)} />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className={labelClass}>Departamento</label>
-                            <select className={inputClass} value={formData.contractInfo?.department || 'enfermagem'} onChange={e => handleChange('contractInfo', 'department', e.target.value)}>
+                            <select disabled={!isEditing} className={inputClass} value={formData.contractInfo?.department || 'enfermagem'} onChange={e => handleChange('contractInfo', 'department', e.target.value)}>
                             <option value="enfermagem">Enfermagem</option>
                             <option value="administrativo">Administrativo</option>
                             <option value="limpeza">Limpeza</option>
@@ -302,14 +387,14 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                         </div>
                         <div>
                             <label className={labelClass}>Data Admissão</label>
-                            <input type="date" className={inputClass} value={formData.contractInfo?.admissionDate || ''} onChange={e => handleChange('contractInfo', 'admissionDate', e.target.value)} />
+                            <input disabled={!isEditing} type="date" className={inputClass} value={formData.contractInfo?.admissionDate || ''} onChange={e => handleChange('contractInfo', 'admissionDate', e.target.value)} />
                         </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className={labelClass}>Escala</label>
-                            <select className={inputClass} value={formData.contractInfo?.scale || '12x36'} onChange={e => handleChange('contractInfo', 'scale', e.target.value)}>
+                            <select disabled={!isEditing} className={inputClass} value={formData.contractInfo?.scale || '12x36'} onChange={e => handleChange('contractInfo', 'scale', e.target.value)}>
                             <option value="12x36">12x36</option>
                             <option value="6x1">6x1</option>
                             <option value="5x2">5x2</option>
@@ -318,7 +403,7 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                         </div>
                         <div>
                             <label className={labelClass}>Turno</label>
-                            <select className={inputClass} value={formData.contractInfo?.workShift || 'diurno'} onChange={e => handleChange('contractInfo', 'workShift', e.target.value)}>
+                            <select disabled={!isEditing} className={inputClass} value={formData.contractInfo?.workShift || 'diurno'} onChange={e => handleChange('contractInfo', 'workShift', e.target.value)}>
                             <option value="diurno">Diurno</option>
                             <option value="noturno">Noturno</option>
                             </select>
@@ -329,9 +414,9 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                        <Building2 className="w-5 h-5 text-gray-400" />
                        <div className="flex-1">
                            <label className="text-[10px] font-bold text-gray-500 block uppercase">Registro Profissional (Coren/Etc)</label>
-                           <input className="bg-transparent text-sm font-medium text-gray-900 outline-none w-full" value={formData.professionalInfo?.corenNumber || ''} onChange={e => handleChange('professionalInfo', 'corenNumber', e.target.value)} placeholder="Ex: 123456" />
+                           <input disabled={!isEditing} className="bg-transparent text-sm font-medium text-gray-900 outline-none w-full disabled:text-gray-500" value={formData.professionalInfo?.corenNumber || ''} onChange={e => handleChange('professionalInfo', 'corenNumber', e.target.value)} placeholder="Ex: 123456" />
                        </div>
-                       <input className="w-12 bg-white border border-gray-200 rounded p-1 text-center text-sm font-bold uppercase" value={formData.professionalInfo?.corenState || ''} onChange={e => handleChange('professionalInfo', 'corenState', e.target.value)} maxLength={2} placeholder="UF" />
+                       <input disabled={!isEditing} className="w-12 bg-white border border-gray-200 rounded p-1 text-center text-sm font-bold uppercase disabled:bg-gray-100" value={formData.professionalInfo?.corenState || ''} onChange={e => handleChange('professionalInfo', 'corenState', e.target.value)} maxLength={2} placeholder="UF" />
                     </div>
                 </div>
 
@@ -345,11 +430,13 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                             valueInCents={formData.financialInfo?.baseSalary}
                             onChange={(cents) => handleChange('financialInfo', 'baseSalary', cents)}
                             className="text-lg"
+                            disabled={!isEditing}
                         />
 
                         <div>
                             <label className="text-xs font-bold text-blue-800 uppercase tracking-wide mb-1.5 block">Adicional de Insalubridade</label>
                             <select 
+                                disabled={!isEditing}
                                 className={`${inputClass} border-blue-200 focus:ring-blue-500`}
                                 value={formData.financialInfo?.insalubridadeLevel || 0}
                                 onChange={e => handleChange('financialInfo', 'insalubridadeLevel', parseInt(e.target.value))}
@@ -370,14 +457,20 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      {/* Benefícios (Checks) */}
                      <div className="space-y-3">
-                        <div className="bg-white border border-gray-200 p-3 rounded-xl flex items-center gap-3 hover:border-blue-300 transition-all cursor-pointer shadow-sm group" onClick={() => handleChange('benefits', 'receivesTransportVoucher', !formData.benefits?.receivesTransportVoucher)}>
+                        <div 
+                            className={`bg-white border border-gray-200 p-3 rounded-xl flex items-center gap-3 transition-all shadow-sm group ${isEditing ? 'hover:border-blue-300 cursor-pointer' : 'opacity-75 cursor-not-allowed'}`}
+                            onClick={() => isEditing && handleChange('benefits', 'receivesTransportVoucher', !formData.benefits?.receivesTransportVoucher)}
+                        >
                             <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${formData.benefits?.receivesTransportVoucher ? 'bg-blue-600 border-blue-600' : 'border-gray-300 bg-white'}`}>
                                 {formData.benefits?.receivesTransportVoucher && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
                             </div>
                             <span className="text-sm font-medium text-gray-700 group-hover:text-blue-700">Recebe Vale Transporte (6% Desc.)</span>
                         </div>
 
-                        <div className="bg-white border border-gray-200 p-3 rounded-xl flex items-center gap-3 hover:border-blue-300 transition-all cursor-pointer shadow-sm group" onClick={() => handleChange('benefits', 'receivesMealVoucher', !formData.benefits?.receivesMealVoucher)}>
+                        <div 
+                            className={`bg-white border border-gray-200 p-3 rounded-xl flex items-center gap-3 transition-all shadow-sm group ${isEditing ? 'hover:border-blue-300 cursor-pointer' : 'opacity-75 cursor-not-allowed'}`}
+                            onClick={() => isEditing && handleChange('benefits', 'receivesMealVoucher', !formData.benefits?.receivesMealVoucher)}
+                        >
                             <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${formData.benefits?.receivesMealVoucher ? 'bg-blue-600 border-blue-600' : 'border-gray-300 bg-white'}`}>
                                 {formData.benefits?.receivesMealVoucher && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
                             </div>
@@ -386,15 +479,18 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                      </div>
 
                      {/* Descontos Fixos */}
-                     <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                     <div className={`bg-gray-50 rounded-xl p-4 border border-gray-200 ${!isEditing && 'opacity-80'}`}>
                         <div className="flex justify-between items-center mb-3">
                             <span className="text-xs font-bold text-gray-500 uppercase">Descontos Fixos Recorrentes</span>
-                            <button onClick={addCustomDeduction} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors uppercase border border-blue-200 bg-white">+ Adicionar</button>
+                            {isEditing && (
+                                <button onClick={addCustomDeduction} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors uppercase border border-blue-200 bg-white">+ Adicionar</button>
+                            )}
                         </div>
                         <div className="space-y-2">
                             {formData.financialInfo?.customDeductions?.map((item, idx) => (
                                 <div key={idx} className="flex gap-2 items-center">
                                     <input 
+                                        disabled={!isEditing}
                                         className={`${inputClass} text-xs py-1.5`}
                                         placeholder="Ex: Convênio"
                                         value={item.description} 
@@ -402,6 +498,7 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                                     />
                                     <div className="w-24">
                                         <input 
+                                            disabled={!isEditing}
                                             className={`${inputClass} text-xs py-1.5 text-right font-mono`}
                                             value={(item.amount / 100).toFixed(2)}
                                             onChange={e => {
@@ -411,7 +508,9 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                                             placeholder="0.00"
                                         />
                                     </div>
-                                    <button onClick={() => removeCustomDeduction(idx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4"/></button>
+                                    {isEditing && (
+                                        <button onClick={() => removeCustomDeduction(idx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4"/></button>
+                                    )}
                                 </div>
                             ))}
                             {(!formData.financialInfo?.customDeductions || formData.financialInfo.customDeductions.length === 0) && (
@@ -435,21 +534,26 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-1">
                    <label className={labelClass}>Banco</label>
-                   <input className={inputClass} placeholder="Ex: Itaú (341)" value={formData.financialInfo?.bankInfo.banco || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'banco', e.target.value)} />
+                   <input disabled={!isEditing} className={inputClass} placeholder="Ex: Itaú (341)" value={formData.financialInfo?.bankInfo.banco || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'banco', e.target.value)} />
                 </div>
                 <div>
                    <label className={labelClass}>Agência</label>
-                   <input className={inputClass} placeholder="0000" value={formData.financialInfo?.bankInfo.agencia || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'agencia', e.target.value)} />
+                   <input disabled={!isEditing} className={inputClass} placeholder="0000" value={formData.financialInfo?.bankInfo.agencia || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'agencia', e.target.value)} />
                 </div>
                 <div>
                    <label className={labelClass}>Conta</label>
-                   <input className={inputClass} placeholder="00000-0" value={formData.financialInfo?.bankInfo.conta || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'conta', e.target.value)} />
+                   <input disabled={!isEditing} className={inputClass} placeholder="00000-0" value={formData.financialInfo?.bankInfo.conta || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'conta', e.target.value)} />
                 </div>
                 
                 <div className="md:col-span-3 bg-emerald-50 p-4 rounded-xl border border-emerald-100 grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
                     <div>
                        <label className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1.5 block">Tipo Chave Pix</label>
-                       <select className={`${inputClass} border-emerald-200 focus:ring-emerald-500 focus:border-emerald-500`} value={formData.financialInfo?.bankInfo.pixKeyType || 'cpf'} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'pixKeyType', e.target.value)}>
+                       <select 
+                         disabled={!isEditing}
+                         className={`${inputClass} border-emerald-200 focus:ring-emerald-500 focus:border-emerald-500`} 
+                         value={formData.financialInfo?.bankInfo.pixKeyType || 'cpf'} 
+                         onChange={handlePixTypeChange}
+                       >
                           <option value="cpf">CPF</option>
                           <option value="email">Email</option>
                           <option value="telefone">Telefone</option>
@@ -458,22 +562,18 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                     </div>
                     <div className="md:col-span-2">
                        <label className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1.5 block">Chave Pix</label>
-                       <input className={`${inputClass} border-emerald-200 focus:ring-emerald-500 focus:border-emerald-500`} value={formData.financialInfo?.bankInfo.pixKey || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'pixKey', e.target.value)} placeholder="Chave Pix" />
+                       <input 
+                         disabled={!isEditing}
+                         className={`${inputClass} border-emerald-200 focus:ring-emerald-500 focus:border-emerald-500`} 
+                         value={formData.financialInfo?.bankInfo.pixKey || ''} 
+                         onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'pixKey', e.target.value)} 
+                         placeholder="Chave Pix" 
+                       />
                     </div>
                 </div>
              </div>
           </div>
         )}
-      </div>
-
-      {/* FOOTER */}
-      <div className="p-5 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 rounded-b-2xl">
-         <button 
-           onClick={handleSave}
-           className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md transition-all active:scale-95 hover:-translate-y-0.5"
-         >
-            <Save className="w-5 h-5" /> Salvar Alterações
-         </button>
       </div>
 
     </div>
