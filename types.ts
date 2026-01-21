@@ -317,6 +317,8 @@ export interface Staff {
   financialInfo?: {
     baseSalary: number; // Em centavos (R$ 2000,00 -> 200000)
     insalubridadeLevel: 0 | 20 | 40;
+    // Lista de descontos/adicionais fixos (ex: Plano de Saúde, Empréstimo)
+    customDeductions?: { id: string; description: string; amount: number }[]; 
     bankInfo: {
       banco?: string;
       agencia?: string;

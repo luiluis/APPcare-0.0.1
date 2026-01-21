@@ -1,0 +1,247 @@
+
+import React, { useState, useMemo } from 'react';
+import { 
+  Users, Calendar, DollarSign, CheckCircle2, AlertCircle, 
+  FileText, Wallet, ChevronLeft, ChevronRight, Calculator, Check
+} from 'lucide-react';
+import { useData } from '../contexts/DataContext';
+import { usePayrollLogic } from '../hooks/usePayrollLogic';
+import { usePayrollGeneration } from '../hooks/usePayrollGeneration';
+import { usePaymentProcessing } from '../hooks/usePaymentProcessing';
+import { formatCurrency, formatDateBr } from '../lib/utils';
+import { InvoiceStatus, InvoiceCategory } from '../types';
+import { StatCard } from '../components/StatCard';
+
+export const PayrollPage: React.FC = () => {
+  const { staff, invoices, setInvoices, staffIncidents, selectedBranchId } = useData();
+  const { calculateEstimatedSalary } = usePayrollLogic();
+  const { generatePayrollInvoice } = usePayrollGeneration({ invoices, onUpdateInvoices: setInvoices });
+  const { registerPayment } = usePaymentProcessing({ invoices, onUpdateInvoices: setInvoices });
+
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const month = selectedDate.getMonth() + 1;
+  const year = selectedDate.getFullYear();
+
+  // --- FILTRO DE FUNCIONÁRIOS (Por Unidade) ---
+  const filteredStaff = useMemo(() => {
+    return staff.filter(s => 
+      s.active && 
+      (selectedBranchId === 'all' || s.branchId === selectedBranchId)
+    );
+  }, [staff, selectedBranchId]);
+
+  // --- MAPA MESTRE DA FOLHA ---
+  // Combina dados do cadastro (estimativa) com faturas já geradas (realidade)
+  const payrollMap = useMemo(() => {
+    return filteredStaff.map(employee => {
+      // 1. Procura se já existe fatura de salário para este funcionário nesta competência
+      const existingInvoice = invoices.find(inv => 
+        inv.type === 'expense' &&
+        (inv.category === InvoiceCategory.SALARIO || inv.items[0]?.category === InvoiceCategory.SALARIO) &&
+        inv.staffId === employee.id &&
+        inv.month === month &&
+        inv.year === year
+      );
+
+      // 2. Calcula estimativa (sempre útil para comparar ou para gerar)
+      const estimate = calculateEstimatedSalary(employee, staffIncidents, month, year);
+
+      return {
+        staff: employee,
+        invoice: existingInvoice,
+        estimate: estimate,
+        // Se existe fatura, usa o valor dela. Se não, usa a estimativa líquida.
+        finalAmount: existingInvoice ? existingInvoice.totalAmount : estimate.finalEstimate,
+        status: existingInvoice ? existingInvoice.status : 'not_generated'
+      };
+    });
+  }, [filteredStaff, invoices, staffIncidents, month, year, calculateEstimatedSalary]);
+
+  // --- TOTALIZADORES ---
+  const stats = useMemo(() => {
+    return payrollMap.reduce((acc, curr) => {
+      acc.totalValue += curr.finalAmount;
+      if (curr.status === InvoiceStatus.PAID) acc.totalPaid += curr.finalAmount;
+      if (curr.status === 'not_generated') acc.pendingGeneration++;
+      if (curr.status === InvoiceStatus.PENDING) acc.pendingPayment++;
+      return acc;
+    }, { totalValue: 0, totalPaid: 0, pendingGeneration: 0, pendingPayment: 0 });
+  }, [payrollMap]);
+
+  // --- ACTIONS ---
+
+  const handleMonthChange = (offset: number) => {
+    const newDate = new Date(selectedDate);
+    newDate.setMonth(newDate.getMonth() + offset);
+    setSelectedDate(newDate);
+  };
+
+  const handleGenerateBatch = () => {
+    if (!confirm(`Confirmar geração da folha para ${payrollMap.filter(i => i.status === 'not_generated').length} colaboradores?`)) return;
+
+    payrollMap.forEach(item => {
+      if (item.status === 'not_generated') {
+        // Gera fatura usando o hook
+        generatePayrollInvoice(
+          item.staff,
+          item.estimate.finalEstimate,
+          new Date(year, month, 5).toISOString().split('T')[0], // Vencimento dia 5 do mês seguinte
+          `Salário ${month.toString().padStart(2, '0')}/${year}`,
+          InvoiceCategory.SALARIO
+        );
+      }
+    });
+  };
+
+  const handleQuickPay = (invoiceId: string, amount: number) => {
+    if (confirm("Confirmar pagamento deste salário via PIX/Transferência?")) {
+        const today = new Date().toISOString().split('T')[0];
+        registerPayment(invoiceId, amount / 100, 'transferencia', today, 'Pagamento via Painel RH');
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300 pb-20">
+      
+      {/* HEADER & NAV */}
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+         <div>
+            <h1 className="text-2xl font-bold text-gray-900">Folha de Pagamento</h1>
+            <p className="text-gray-500 text-sm">Gestão de salários, adiantamentos e holerites.</p>
+         </div>
+
+         <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm self-start md:self-auto items-center">
+             <button onClick={() => handleMonthChange(-1)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"><ChevronLeft className="w-5 h-5"/></button>
+             <div className="px-4 text-center min-w-[160px]">
+                 <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Competência</span>
+                 <span className="text-lg font-bold text-gray-900 capitalize">
+                    {selectedDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                 </span>
+             </div>
+             <button onClick={() => handleMonthChange(1)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"><ChevronRight className="w-5 h-5"/></button>
+         </div>
+      </div>
+
+      {/* KPI CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+         <StatCard 
+            title="Total da Folha" 
+            value={formatCurrency(stats.totalValue)} 
+            icon={<DollarSign className="w-6 h-6"/>} 
+            color="blue"
+         />
+         <StatCard 
+            title="Pago" 
+            value={formatCurrency(stats.totalPaid)} 
+            icon={<CheckCircle2 className="w-6 h-6"/>} 
+            color="green"
+         />
+         <StatCard 
+            title="A Pagar" 
+            value={`${stats.pendingPayment} func.`} 
+            icon={<Wallet className="w-6 h-6"/>} 
+            color="amber"
+            trend={formatCurrency(stats.totalValue - stats.totalPaid)}
+         />
+         <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 flex flex-col justify-center items-center text-center">
+             {stats.pendingGeneration > 0 ? (
+                 <>
+                    <p className="text-sm text-gray-500 mb-2">{stats.pendingGeneration} pendentes de geração</p>
+                    <button 
+                        onClick={handleGenerateBatch}
+                        className="w-full py-2.5 bg-indigo-600 text-white font-bold rounded-xl shadow-md hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                        <Calculator className="w-4 h-4" /> Gerar Folha
+                    </button>
+                 </>
+             ) : (
+                 <>
+                    <CheckCircle2 className="w-8 h-8 text-emerald-500 mb-2" />
+                    <p className="font-bold text-gray-900">Folha Gerada</p>
+                    <p className="text-xs text-gray-500">Todos os lançamentos criados.</p>
+                 </>
+             )}
+         </div>
+      </div>
+
+      {/* TABLE */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <table className="w-full text-left">
+              <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase border-b border-gray-200">
+                  <tr>
+                      <th className="px-6 py-4">Colaborador</th>
+                      <th className="px-6 py-4 text-right">Salário Base</th>
+                      <th className="px-6 py-4 text-right">Adicionais</th>
+                      <th className="px-6 py-4 text-right">Descontos</th>
+                      <th className="px-6 py-4 text-right bg-blue-50/30">Líquido</th>
+                      <th className="px-6 py-4 text-center">Status</th>
+                      <th className="px-6 py-4 text-center">Ações</th>
+                  </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                  {payrollMap.map((item) => {
+                      const isGenerated = item.status !== 'not_generated';
+                      return (
+                          <tr key={item.staff.id} className="hover:bg-gray-50 transition-colors group">
+                              <td className="px-6 py-4">
+                                  <div>
+                                      <p className="font-bold text-gray-900">{item.staff.name}</p>
+                                      <p className="text-xs text-gray-500">{item.staff.role}</p>
+                                  </div>
+                              </td>
+                              <td className="px-6 py-4 text-right text-gray-600">
+                                  {formatCurrency(item.estimate.base)}
+                              </td>
+                              <td className="px-6 py-4 text-right text-emerald-600 font-medium">
+                                  + {formatCurrency(item.estimate.insalubrity + item.estimate.totalAdditions)}
+                              </td>
+                              <td className="px-6 py-4 text-right text-rose-600 font-medium">
+                                  - {formatCurrency(item.estimate.totalDiscounts + item.estimate.inssValue + item.estimate.vtDiscount)}
+                              </td>
+                              <td className="px-6 py-4 text-right font-bold text-gray-900 bg-blue-50/30">
+                                  {formatCurrency(item.finalAmount)}
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                  {item.status === 'not_generated' && <span className="inline-flex px-2.5 py-1 rounded-md bg-gray-100 text-gray-500 text-xs font-bold uppercase">Simulação</span>}
+                                  {item.status === InvoiceStatus.PENDING && <span className="inline-flex px-2.5 py-1 rounded-md bg-amber-100 text-amber-700 text-xs font-bold uppercase">Pendente</span>}
+                                  {item.status === InvoiceStatus.PAID && <span className="inline-flex px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 text-xs font-bold uppercase">Pago</span>}
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                      {isGenerated ? (
+                                          <>
+                                            <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Ver Holerite">
+                                                <FileText className="w-4 h-4" />
+                                            </button>
+                                            {item.status !== InvoiceStatus.PAID && (
+                                                <button 
+                                                    onClick={() => handleQuickPay(item.invoice!.id, item.finalAmount)}
+                                                    className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" 
+                                                    title="Confirmar Pagamento"
+                                                >
+                                                    <Check className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                          </>
+                                      ) : (
+                                          <span className="text-xs text-gray-400 italic">Gere a folha</span>
+                                      )}
+                                  </div>
+                              </td>
+                          </tr>
+                      );
+                  })}
+              </tbody>
+          </table>
+          
+          {payrollMap.length === 0 && (
+              <div className="p-10 text-center text-gray-400">
+                  <Users className="w-12 h-12 mx-auto mb-3 text-gray-200" />
+                  <p>Nenhum colaborador encontrado para a unidade selecionada.</p>
+              </div>
+          )}
+      </div>
+
+    </div>
+  );
+};

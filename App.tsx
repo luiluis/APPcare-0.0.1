@@ -16,6 +16,7 @@ import { FinancePage } from './pages/FinancePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { StaffListPage } from './pages/StaffListPage.tsx';
 import { StaffProfilePage } from './pages/StaffProfilePage.tsx';
+import { PayrollPage } from './pages/PayrollPage.tsx';
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -57,9 +58,10 @@ function App() {
           {/* Financeiro */}
           <Route path="/financeiro" element={<FinancePage />} />
           
-          {/* RH / Equipe */}
+          {/* RH / Equipe / Folha */}
           <Route path="/rh" element={<StaffListPage />} />
           <Route path="/rh/:id" element={<StaffProfilePage />} />
+          <Route path="/payroll" element={<PayrollPage />} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

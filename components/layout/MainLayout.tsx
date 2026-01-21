@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  LayoutDashboard, Users, Wallet, ClipboardCheck, History, LogOut, Menu, Activity, X, Briefcase
+  LayoutDashboard, Users, Wallet, ClipboardCheck, History, LogOut, Menu, Activity, X, Briefcase, ScrollText
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.tsx';
 import { useData } from '../../contexts/DataContext.tsx';
@@ -15,12 +15,13 @@ export const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  // Nova ordem hierárquica: Gestão (Visão Geral, Financeiro, RH) > Operacional (Residentes, Rotina)
+  // Nova ordem hierárquica: Gestão (Visão Geral, Financeiro, RH, Folha) > Operacional (Residentes, Rotina)
   const navItems = [
     // --- Bloco Gestão ---
     { path: '/', label: 'Visão Geral', icon: LayoutDashboard },
     { path: '/financeiro', label: 'Financeiro', icon: Wallet },
     { path: '/rh', label: 'Equipe', icon: Briefcase },
+    { path: '/payroll', label: 'Folha de Pagamento', icon: ScrollText },
     
     // --- Bloco Operacional ---
     { path: '/residentes', label: 'Residentes', icon: Users },
@@ -39,7 +40,7 @@ export const MainLayout: React.FC = () => {
         <nav className="space-y-2 flex-1">
           {navItems.map((item, index) => (
             <React.Fragment key={item.path}>
-              {/* Separador Visual antes de 'Residentes' (índice 3 na nova ordem) */}
+              {/* Separador Visual antes de 'Residentes' */}
               {item.path === '/residentes' && (
                 <div className="pt-4 pb-2 pl-4">
                   <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Operacional</p>

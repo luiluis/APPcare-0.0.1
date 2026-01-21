@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Staff, Dependent } from '../../types';
 import { 
   User, Briefcase, Wallet, ChevronDown, ChevronUp, 
-  Save, Plus, Trash2, CheckCircle2
+  Save, Plus, Trash2, CheckCircle2, Building2
 } from 'lucide-react';
 import { formatCPF, formatPhone, stripSpecialChars } from '../../lib/utils';
 
@@ -16,36 +16,39 @@ interface StaffInfoTabProps {
 const inputClass = "w-full border border-gray-300 bg-white rounded-lg px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all disabled:bg-gray-100 disabled:text-gray-500";
 const labelClass = "text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 block";
 
-// Função Utilitária Interna
+// Função Utilitária Interna (Formatação R$)
 const formatMoneyInput = (cents: number | undefined | null): string => {
   if (cents === undefined || cents === null || isNaN(cents)) return "0,00";
   const value = cents / 100;
   return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-// Subcomponente de Input Monetário Refatorado
+// Componente de Input Monetário Robusto
 const MoneyInput = ({ 
   label, 
   valueInCents, 
   onChange, 
-  disabled = false 
+  disabled = false,
+  placeholder = "0,00",
+  className = ""
 }: { 
-  label: string, 
+  label?: string, 
   valueInCents: number | undefined, 
   onChange: (cents: number) => void,
-  disabled?: boolean
+  disabled?: boolean,
+  placeholder?: string,
+  className?: string
 }) => {
   
   const handleMoneyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Remove tudo que não é dígito
     const rawValue = e.target.value.replace(/\D/g, '');
     const cents = rawValue ? parseInt(rawValue, 10) : 0;
     onChange(cents);
   };
 
   return (
-    <div className="flex flex-col gap-1">
-      <label className={labelClass}>{label}</label>
+    <div className={`flex flex-col gap-1 w-full ${className}`}>
+      {label && <label className={labelClass}>{label}</label>}
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">R$</span>
         <input 
@@ -55,7 +58,7 @@ const MoneyInput = ({
           className={`w-full border border-gray-300 bg-white rounded-lg pl-10 pr-3 py-2.5 text-sm font-bold text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all disabled:bg-gray-100 disabled:text-gray-500`}
           value={formatMoneyInput(valueInCents)}
           onChange={handleMoneyChange}
-          placeholder="0,00"
+          placeholder={placeholder}
         />
       </div>
     </div>
@@ -130,7 +133,35 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
     setFormData(prev => ({ ...prev, dependents: newDeps }));
   };
 
-  // --- COMPONENTS ---
+  // --- FINANCEIRO CUSTOMIZADO ---
+  const addCustomDeduction = () => {
+    const newDed = { id: `ded-${Date.now()}`, description: '', amount: 0 };
+    const currentDeductions = formData.financialInfo?.customDeductions || [];
+    setFormData(prev => ({
+        ...prev,
+        financialInfo: { ...prev.financialInfo!, customDeductions: [...currentDeductions, newDed] }
+    }));
+  };
+
+  const updateCustomDeduction = (index: number, field: 'description' | 'amount', value: any) => {
+    const currentDeductions = [...(formData.financialInfo?.customDeductions || [])];
+    currentDeductions[index] = { ...currentDeductions[index], [field]: value };
+    setFormData(prev => ({
+        ...prev,
+        financialInfo: { ...prev.financialInfo!, customDeductions: currentDeductions }
+    }));
+  };
+
+  const removeCustomDeduction = (index: number) => {
+    const currentDeductions = [...(formData.financialInfo?.customDeductions || [])];
+    currentDeductions.splice(index, 1);
+    setFormData(prev => ({
+        ...prev,
+        financialInfo: { ...prev.financialInfo!, customDeductions: currentDeductions }
+    }));
+  };
+
+  // --- UI COMPONENTS ---
   const AccordionHeader = ({ id, title, icon: Icon, isOpen }: any) => (
     <div 
       onClick={() => setActiveSection(activeSection === id ? 'personal' : id)}
@@ -149,7 +180,6 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden animate-in fade-in duration-300 relative mb-10">
       
-      {/* Toast */}
       {showSuccess && (
         <div className="absolute top-4 right-4 z-10 bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-sm font-bold animate-in slide-in-from-right fade-in">
           <CheckCircle2 className="w-5 h-5" /> Alterações salvas!
@@ -168,13 +198,15 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                 <input className={inputClass} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
               </div>
               
-              <div>
-                <label className={labelClass}>CPF</label>
-                <input className={inputClass} value={formatCPF(formData.personalInfo?.cpf || '')} onChange={e => handleChange('personalInfo', 'cpf', e.target.value)} placeholder="000.000.000-00" />
-              </div>
-              <div>
-                <label className={labelClass}>RG</label>
-                <input className={inputClass} value={formData.personalInfo?.rg || ''} onChange={e => handleChange('personalInfo', 'rg', e.target.value)} />
+              <div className="grid grid-cols-2 gap-4 md:col-span-2">
+                  <div>
+                    <label className={labelClass}>CPF</label>
+                    <input className={inputClass} value={formatCPF(formData.personalInfo?.cpf || '')} onChange={e => handleChange('personalInfo', 'cpf', e.target.value)} placeholder="000.000.000-00" />
+                  </div>
+                  <div>
+                    <label className={labelClass}>RG</label>
+                    <input className={inputClass} value={formData.personalInfo?.rg || ''} onChange={e => handleChange('personalInfo', 'rg', e.target.value)} />
+                  </div>
               </div>
 
               <div>
@@ -197,17 +229,19 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                 <input className={inputClass} value={formData.personalInfo?.address || ''} onChange={e => handleChange('personalInfo', 'address', e.target.value)} />
               </div>
 
-              <div>
-                <label className={labelClass}>Telefone / Celular</label>
-                <input className={inputClass} value={formatPhone(formData.personalInfo?.phone || '')} onChange={e => handleChange('personalInfo', 'phone', e.target.value)} placeholder="(00) 00000-0000" />
-              </div>
-              <div>
-                <label className={labelClass}>Email Pessoal</label>
-                <input type="email" className={inputClass} value={formData.personalInfo?.email || ''} onChange={e => handleChange('personalInfo', 'email', e.target.value)} />
+              <div className="grid grid-cols-2 gap-4 md:col-span-2">
+                  <div>
+                    <label className={labelClass}>Telefone / Celular</label>
+                    <input className={inputClass} value={formatPhone(formData.personalInfo?.phone || '')} onChange={e => handleChange('personalInfo', 'phone', e.target.value)} placeholder="(00) 00000-0000" />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Email Pessoal</label>
+                    <input type="email" className={inputClass} value={formData.personalInfo?.email || ''} onChange={e => handleChange('personalInfo', 'email', e.target.value)} />
+                  </div>
               </div>
             </div>
 
-            {/* Sub-seção Dependentes */}
+            {/* Dependentes */}
             <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
               <div className="flex justify-between items-center mb-4">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Dependentes ({formData.dependents?.length || 0})</label>
@@ -217,18 +251,18 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
               <div className="space-y-3">
                 {formData.dependents?.map((dep, idx) => (
                   <div key={idx} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-white p-2 rounded-lg border border-gray-200 shadow-sm">
-                    <input className={`${inputClass} sm:flex-[2] border-0 bg-gray-50 focus:bg-white focus:ring-1`} placeholder="Nome do Dependente" value={dep.name} onChange={e => updateDependent(idx, 'name', e.target.value)} />
+                    <input className={`${inputClass} sm:flex-[2] border-0 bg-gray-50 focus:bg-white focus:ring-1`} placeholder="Nome" value={dep.name} onChange={e => updateDependent(idx, 'name', e.target.value)} />
                     <select className={`${inputClass} sm:flex-1 border-0 bg-gray-50 focus:bg-white focus:ring-1`} value={dep.relation} onChange={e => updateDependent(idx, 'relation', e.target.value)}>
                       <option value="filho">Filho(a)</option>
                       <option value="conjuge">Cônjuge</option>
                       <option value="outro">Outro</option>
                     </select>
                     <input type="date" className={`${inputClass} sm:flex-1 border-0 bg-gray-50 focus:bg-white focus:ring-1`} value={dep.birthDate} onChange={e => updateDependent(idx, 'birthDate', e.target.value)} />
-                    <button onClick={() => removeDependent(idx)} className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors w-full sm:w-auto flex justify-center"><Trash2 className="w-4 h-4"/></button>
+                    <button onClick={() => removeDependent(idx)} className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
                   </div>
                 ))}
                 {(!formData.dependents || formData.dependents.length === 0) && (
-                  <p className="text-sm text-gray-400 italic text-center py-4">Nenhum dependente cadastrado.</p>
+                  <p className="text-sm text-gray-400 italic text-center py-2">Nenhum dependente cadastrado.</p>
                 )}
               </div>
             </div>
@@ -250,10 +284,10 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
              <div>
                 <label className={labelClass}>Departamento</label>
                 <select className={inputClass} value={formData.contractInfo?.department || 'enfermagem'} onChange={e => handleChange('contractInfo', 'department', e.target.value)}>
-                  <option value="enfermagem">Enfermagem / Cuidados</option>
+                  <option value="enfermagem">Enfermagem</option>
                   <option value="administrativo">Administrativo</option>
-                  <option value="limpeza">Limpeza / Serviços Gerais</option>
-                  <option value="cozinha">Cozinha / Nutrição</option>
+                  <option value="limpeza">Limpeza</option>
+                  <option value="cozinha">Cozinha</option>
                   <option value="manutencao">Manutenção</option>
                 </select>
              </div>
@@ -264,12 +298,12 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
              </div>
 
              <div>
-                <label className={labelClass}>Escala de Trabalho</label>
+                <label className={labelClass}>Escala</label>
                 <select className={inputClass} value={formData.contractInfo?.scale || '12x36'} onChange={e => handleChange('contractInfo', 'scale', e.target.value)}>
                   <option value="12x36">12x36</option>
                   <option value="6x1">6x1</option>
-                  <option value="5x2">5x2 (Comercial)</option>
-                  <option value="outra">Outra / Flexível</option>
+                  <option value="5x2">5x2</option>
+                  <option value="outra">Outra</option>
                 </select>
              </div>
 
@@ -281,40 +315,39 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                 </select>
              </div>
 
-             <div className="md:col-span-2 p-4 bg-blue-50 border border-blue-100 rounded-xl mt-2">
-                <h4 className="text-xs font-bold text-blue-800 uppercase mb-3 flex items-center gap-2">Registro Profissional</h4>
-                <div className="flex gap-4">
-                   <div className="flex-1">
-                      <label className="text-[10px] font-bold text-blue-600 mb-1 block uppercase">Número (Coren/CRM/Outro)</label>
-                      <input className="w-full bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-medium text-blue-900 focus:ring-2 focus:ring-blue-400 outline-none" value={formData.professionalInfo?.corenNumber || ''} onChange={e => handleChange('professionalInfo', 'corenNumber', e.target.value)} />
-                   </div>
-                   <div className="w-24">
-                      <label className="text-[10px] font-bold text-blue-600 mb-1 block uppercase">UF</label>
-                      <input className="w-full bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-medium text-blue-900 focus:ring-2 focus:ring-blue-400 outline-none uppercase" value={formData.professionalInfo?.corenState || ''} onChange={e => handleChange('professionalInfo', 'corenState', e.target.value)} maxLength={2} />
-                   </div>
+             <div className="md:col-span-2 p-4 bg-blue-50 border border-blue-100 rounded-xl mt-2 flex gap-4">
+                <div className="flex-1">
+                   <label className="text-[10px] font-bold text-blue-600 mb-1 block uppercase">Registro Profissional (Nº)</label>
+                   <input className="w-full bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-medium text-blue-900 focus:ring-2 focus:ring-blue-400 outline-none" value={formData.professionalInfo?.corenNumber || ''} onChange={e => handleChange('professionalInfo', 'corenNumber', e.target.value)} placeholder="Ex: 123456" />
+                </div>
+                <div className="w-24">
+                   <label className="text-[10px] font-bold text-blue-600 mb-1 block uppercase">UF</label>
+                   <input className="w-full bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-medium text-blue-900 focus:ring-2 focus:ring-blue-400 outline-none uppercase" value={formData.professionalInfo?.corenState || ''} onChange={e => handleChange('professionalInfo', 'corenState', e.target.value)} maxLength={2} placeholder="SP" />
                 </div>
              </div>
           </div>
         )}
       </div>
 
-      {/* --- SEÇÃO 3: FINANCEIRO & BENEFÍCIOS --- */}
+      {/* --- SEÇÃO 3: FINANCEIRO --- */}
       <div className="border-b border-gray-100">
         <AccordionHeader id="finance" title="Financeiro & Benefícios" icon={Wallet} isOpen={activeSection === 'finance'} />
         
         {activeSection === 'finance' && (
-          <div className="p-6 bg-white space-y-8 animate-in slide-in-from-top-2">
+          <div className="p-6 bg-white space-y-6 animate-in slide-in-from-top-2">
              
-             {/* Salário e Adicionais */}
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <MoneyInput 
-                  label="Salário Base (CLT)"
-                  valueInCents={formData.financialInfo?.baseSalary}
-                  onChange={(cents) => handleChange('financialInfo', 'baseSalary', cents)}
-                />
-                
+             {/* Salário em Destaque */}
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-5 rounded-xl border border-gray-100">
+                <div className="md:col-span-2">
+                    <MoneyInput 
+                      label="Salário Base (R$)"
+                      valueInCents={formData.financialInfo?.baseSalary}
+                      onChange={(cents) => handleChange('financialInfo', 'baseSalary', cents)}
+                      className="text-lg"
+                    />
+                </div>
                 <div>
-                  <label className={labelClass}>Adicional de Insalubridade</label>
+                  <label className={labelClass}>Insalubridade</label>
                   <select 
                     className={inputClass}
                     value={formData.financialInfo?.insalubridadeLevel || 0}
@@ -325,61 +358,77 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                     <option value={40}>40% - Grau Máximo</option>
                   </select>
                 </div>
+                <div className="flex items-end pb-2">
+                    <span className="text-xs text-gray-400 font-medium">
+                        * Adicional calculado sobre o salário mínimo vigente.
+                    </span>
+                </div>
+             </div>
+
+             {/* Descontos Fixos */}
+             <div>
+                <div className="flex justify-between items-center mb-3">
+                    <h4 className="font-bold text-gray-700 text-sm uppercase tracking-wide">Descontos Fixos</h4>
+                    <button 
+                        onClick={addCustomDeduction}
+                        className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"
+                    >
+                        <Plus className="w-3 h-3" /> Adicionar
+                    </button>
+                </div>
+
+                <div className="space-y-3">
+                    {formData.financialInfo?.customDeductions?.map((item, idx) => (
+                        <div key={idx} className="flex gap-3 items-center">
+                            <input 
+                                className={`${inputClass} flex-grow`}
+                                placeholder="Descrição (Ex: Plano de Saúde)"
+                                value={item.description} 
+                                onChange={e => updateCustomDeduction(idx, 'description', e.target.value)} 
+                            />
+                            <div className="w-32">
+                                <MoneyInput 
+                                    valueInCents={item.amount}
+                                    onChange={(cents) => updateCustomDeduction(idx, 'amount', cents)}
+                                    placeholder="0,00"
+                                />
+                            </div>
+                            <button 
+                                onClick={() => removeCustomDeduction(idx)}
+                                className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                                <Trash2 className="w-4 h-4"/>
+                            </button>
+                        </div>
+                    ))}
+                    {(!formData.financialInfo?.customDeductions || formData.financialInfo.customDeductions.length === 0) && (
+                        <p className="text-sm text-gray-400 italic bg-gray-50 p-3 rounded-lg border border-dashed border-gray-200">Nenhum desconto ou adicional fixo cadastrado.</p>
+                    )}
+                </div>
              </div>
 
              <div className="h-px bg-gray-100"></div>
 
-             {/* Benefícios (Resgatado e Expandido) */}
-             <div>
-                <h4 className="font-bold text-gray-800 text-sm mb-4 uppercase tracking-wide">Benefícios</h4>
-                <div className="space-y-4">
-                   
-                   {/* Vale Transporte */}
-                   <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 transition-all hover:border-gray-300">
-                      <div className="flex items-center justify-between mb-3">
-                         <div className="flex items-center gap-3">
-                            <input 
-                              type="checkbox" 
-                              id="vt_check"
-                              className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                              checked={formData.benefits?.receivesTransportVoucher || false}
-                              onChange={e => handleChange('benefits', 'receivesTransportVoucher', e.target.checked)}
-                            />
-                            <label htmlFor="vt_check" className="text-sm font-bold text-gray-700 cursor-pointer">Vale Transporte</label>
-                         </div>
-                      </div>
-                      
-                      {formData.benefits?.receivesTransportVoucher && (
-                        <div className="grid grid-cols-2 gap-4 pl-8 animate-in fade-in">
-                           <MoneyInput 
-                              label="Valor Unitário (Diário)"
-                              valueInCents={formData.benefits.transportVoucherUnitValue}
-                              onChange={(cents) => handleNestedChange('benefits', 'transportVoucherUnitValue', '', cents)}
-                           />
-                           <div>
-                              <label className={labelClass}>Qtd. Passagens (Dia)</label>
-                              <input 
-                                type="number" 
-                                className={inputClass} 
-                                value={formData.benefits.transportVoucherDailyQty || 2} 
-                                onChange={e => handleChange('benefits', 'transportVoucherDailyQty', parseInt(e.target.value))}
-                              />
-                           </div>
-                        </div>
-                      )}
-                   </div>
+             {/* Benefícios (Toggles) */}
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-white border border-gray-200 p-3 rounded-xl flex items-center gap-3 hover:border-blue-200 transition-colors cursor-pointer" onClick={() => handleChange('benefits', 'receivesTransportVoucher', !formData.benefits?.receivesTransportVoucher)}>
+                    <input 
+                    type="checkbox" 
+                    className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 pointer-events-none"
+                    checked={formData.benefits?.receivesTransportVoucher || false}
+                    readOnly
+                    />
+                    <label className="text-sm font-bold text-gray-700 cursor-pointer">Vale Transporte</label>
+                </div>
 
-                   {/* Vale Refeição */}
-                   <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-center gap-3 transition-all hover:border-gray-300">
-                        <input 
-                          type="checkbox" 
-                          id="vr_check"
-                          className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                          checked={formData.benefits?.receivesMealVoucher || false}
-                          onChange={e => handleChange('benefits', 'receivesMealVoucher', e.target.checked)}
-                        />
-                        <label htmlFor="vr_check" className="text-sm font-bold text-gray-700 cursor-pointer">Vale Refeição / Alimentação</label>
-                   </div>
+                <div className="bg-white border border-gray-200 p-3 rounded-xl flex items-center gap-3 hover:border-blue-200 transition-colors cursor-pointer" onClick={() => handleChange('benefits', 'receivesMealVoucher', !formData.benefits?.receivesMealVoucher)}>
+                    <input 
+                    type="checkbox" 
+                    className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 pointer-events-none"
+                    checked={formData.benefits?.receivesMealVoucher || false}
+                    readOnly
+                    />
+                    <label className="text-sm font-bold text-gray-700 cursor-pointer">Vale Refeição</label>
                 </div>
              </div>
 
@@ -387,7 +436,7 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
 
              {/* Dados Bancários */}
              <div>
-                <h4 className="font-bold text-gray-800 text-sm mb-4 uppercase tracking-wide">Dados Bancários para Pagamento</h4>
+                <h4 className="font-bold text-gray-700 text-sm mb-3 uppercase tracking-wide">Dados Bancários</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                    <div className="md:col-span-1">
                       <label className={labelClass}>Banco</label>
@@ -402,20 +451,19 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
                       <input className={inputClass} placeholder="00000-0" value={formData.financialInfo?.bankInfo.conta || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'conta', e.target.value)} />
                    </div>
                    
-                   {/* PIX */}
-                   <div className="md:col-span-3 bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                   <div className="md:col-span-3 bg-emerald-50 p-4 rounded-xl border border-emerald-100 grid grid-cols-1 md:grid-cols-3 gap-4">
                        <div>
                           <label className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1.5 block">Tipo Chave Pix</label>
                           <select className={`${inputClass} border-emerald-200 focus:ring-emerald-500 focus:border-emerald-500`} value={formData.financialInfo?.bankInfo.pixKeyType || 'cpf'} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'pixKeyType', e.target.value)}>
                              <option value="cpf">CPF</option>
                              <option value="email">Email</option>
                              <option value="telefone">Telefone</option>
-                             <option value="aleatoria">Chave Aleatória</option>
+                             <option value="aleatoria">Aleatória</option>
                           </select>
                        </div>
                        <div className="md:col-span-2">
                           <label className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1.5 block">Chave Pix</label>
-                          <input className={`${inputClass} border-emerald-200 focus:ring-emerald-500 focus:border-emerald-500`} value={formData.financialInfo?.bankInfo.pixKey || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'pixKey', e.target.value)} placeholder="Chave para transferência" />
+                          <input className={`${inputClass} border-emerald-200 focus:ring-emerald-500 focus:border-emerald-500`} value={formData.financialInfo?.bankInfo.pixKey || ''} onChange={e => handleNestedChange('financialInfo', 'bankInfo', 'pixKey', e.target.value)} placeholder="Chave Pix" />
                        </div>
                    </div>
                 </div>
@@ -425,13 +473,13 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, onUpdate }) =
         )}
       </div>
 
-      {/* FOOTER FIXO DE AÇÃO */}
+      {/* FOOTER */}
       <div className="p-5 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 rounded-b-2xl">
          <button 
            onClick={handleSave}
            className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md transition-all active:scale-95 hover:-translate-y-0.5"
          >
-            <Save className="w-5 h-5" /> Salvar Alterações
+            <Save className="w-5 h-5" /> Salvar
          </button>
       </div>
 
