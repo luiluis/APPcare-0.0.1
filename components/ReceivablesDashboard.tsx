@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   FileText, PlusCircle, Clock, Search, Check, 
   ArrowUpCircle, ArrowDownCircle, 
-  Calendar, Download, Printer, Filter
+  Calendar, Download, Printer, Filter, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { Invoice, Resident, InvoiceStatus, InvoiceCategory, PaymentConfirmDTO } from '../types';
 import { BRANCHES } from '../constants';
@@ -41,17 +41,6 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
     details: null as Invoice | null,
     payment: false,
     paymentTargetIds: [] as string[]
-  });
-
-  // Hooks Separados (SRP)
-  const { createRecurringInvoices, addQuickConsume } = useInvoiceLogic({
-    invoices: allInvoices,
-    onUpdateInvoices
-  });
-
-  const { registerPayment, markAsPaidBatch } = usePaymentProcessing({
-    invoices: allInvoices,
-    onUpdateInvoices
   });
 
   // --- PERFORMANCE OPTIMIZATION ---
@@ -94,6 +83,31 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
       );
   }, [invoices, residentsMap, branchesMap, searchTerm, startDate, endDate, statusFilter, categoryFilter]);
 
+  // --- HOOKS LOGIC (Separated for Pagination & Actions) ---
+  
+  // 1. Instance for Actions (Uses ALL data context for DB operations)
+  const { createRecurringInvoices, addQuickConsume } = useInvoiceLogic({
+    invoices: allInvoices,
+    onUpdateInvoices
+  });
+
+  // 2. Instance for Pagination (Uses FILTERED data for View)
+  const { 
+    paginatedInvoices, 
+    page, 
+    totalPages, 
+    nextPage, 
+    prevPage 
+  } = useInvoiceLogic({
+    invoices: filteredInvoices,
+    onUpdateInvoices: () => {} // View-only instance, no updates back
+  });
+
+  const { registerPayment, markAsPaidBatch } = usePaymentProcessing({
+    invoices: allInvoices,
+    onUpdateInvoices
+  });
+
   // --- STATS CALCULATION ---
   const stats = useMemo(() => {
     // Para simplificar, o KPI considera o saldo restante como pendente
@@ -112,7 +126,8 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
   // --- BULK ACTIONS HANDLERS ---
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedIds(new Set(filteredInvoices.map(i => i.id)));
+      // Select only visible items (paginated)
+      setSelectedIds(new Set(paginatedInvoices.map(i => i.id)));
     } else {
       setSelectedIds(new Set());
     }
@@ -147,7 +162,6 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
         );
     } else {
         // Pagamento em Lote (Mantém lógica anterior de baixa total para simplificar)
-        // Em um app real, distribuiria o valor, mas aqui assumimos baixa de todos
         markAsPaidBatch(paymentTargetIds, paymentDetails);
     }
     
@@ -345,7 +359,7 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
             <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase tracking-wider border-b border-gray-200">
               <tr>
                 <th className="px-6 py-5 w-16 text-center">
-                  <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" onChange={handleSelectAll} checked={filteredInvoices.length > 0 && selectedIds.size === filteredInvoices.length} />
+                  <input type="checkbox" className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" onChange={handleSelectAll} checked={paginatedInvoices.length > 0 && selectedIds.size >= paginatedInvoices.length} />
                 </th>
                 <th className="px-2 py-5">Descrição</th>
                 <th className="px-6 py-5">Categoria</th>
@@ -356,7 +370,7 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredInvoices.length > 0 ? filteredInvoices.map((inv: any) => {
+              {paginatedInvoices.length > 0 ? paginatedInvoices.map((inv: any) => {
                   const paid = inv.paidAmount || 0;
                   const isPartial = paid > 0 && paid < inv.totalAmount;
                   
@@ -431,6 +445,37 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
               )}
             </tbody>
         </table>
+
+        {/* --- PAGINATION FOOTER --- */}
+        {filteredInvoices.length > 0 && (
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                <div className="text-sm text-gray-500 font-medium">
+                    Mostrando <span className="font-bold text-gray-800">{paginatedInvoices.length}</span> de <span className="font-bold text-gray-800">{filteredInvoices.length}</span> resultados
+                </div>
+                
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={prevPage}
+                        disabled={page === 1}
+                        className="p-2 bg-white border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    
+                    <span className="text-sm font-bold text-gray-700 bg-white border border-gray-300 px-3 py-1.5 rounded-lg">
+                        Página {page} de {totalPages || 1}
+                    </span>
+
+                    <button 
+                        onClick={nextPage}
+                        disabled={page === totalPages || totalPages === 0}
+                        className="p-2 bg-white border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <ChevronRight className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+        )}
       </div>
 
       {/* --- MODALS --- */}
@@ -450,7 +495,6 @@ export const ReceivablesDashboard: React.FC<ReceivablesDashboardProps> = ({
         onPay={() => initiatePayment(modalState.details ? [modalState.details.id] : [])}
       />
 
-      {/* Novo Modal de Pagamento com Suporte a Parcial */}
       <PaymentModal 
         isOpen={modalState.payment}
         onClose={() => setModalState(s => ({ ...s, payment: false, paymentTargetIds: [] }))}

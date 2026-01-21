@@ -1,10 +1,11 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext.tsx';
 import { useData } from './contexts/DataContext.tsx';
 import { MainLayout } from './components/layout/MainLayout.tsx';
 import { Loader2 } from 'lucide-react';
+import { storageService } from './services/storageService.ts';
 
 // Páginas
 import { DashboardPage } from './pages/DashboardPage.tsx';
@@ -19,6 +20,14 @@ import { StaffProfilePage } from './pages/StaffProfilePage.tsx';
 function App() {
   const { isAuthenticated } = useAuth();
   
+  // Cleanup Global de Memória
+  useEffect(() => {
+    return () => {
+        // Revoga URLs de arquivos criados durante a sessão
+        storageService.cleanupSession();
+    };
+  }, []);
+
   // Componente interno para acessar o useData apenas se autenticado
   const AuthenticatedRoutes = () => {
     const { isLoading } = useData();
