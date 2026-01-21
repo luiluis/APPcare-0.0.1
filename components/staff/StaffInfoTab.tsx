@@ -1,10 +1,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Staff, Dependent, StaffIncident } from '../../types';
-import { User, Phone, MapPin, Calendar, Briefcase, CreditCard, Building, Edit2, Check, AlertOctagon, Power, RefreshCw, Palmtree, CheckCircle2, Zap, Landmark, Copy, Bus, Utensils, Baby, Trash2, Plus, Shield, Lock, Key, AlertCircle, X, AlertTriangle, Calculator, Send, CheckCircle, Banknote, TrendingDown, TrendingUp, DollarSign } from 'lucide-react';
+import { User, Phone, MapPin, Calendar, Briefcase, CreditCard, Building, Edit2, Check, AlertOctagon, Power, RefreshCw, Palmtree, CheckCircle2, Zap, Landmark, Copy, Bus, Utensils, Baby, Trash2, Plus, Shield, Lock, Key, AlertCircle, X, AlertTriangle, Calculator, Send, CheckCircle, Banknote, TrendingDown, TrendingUp, DollarSign, ArrowRight } from 'lucide-react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { formatCPF, formatPhone, stripSpecialChars, formatDateTime, formatCurrency } from '../../lib/utils';
 import { usePayrollLogic } from '../../hooks/usePayrollLogic';
+import { useData } from '../../contexts/DataContext';
+import { useInvoiceLogic } from '../../hooks/useInvoiceLogic';
 
 interface StaffInfoTabProps {
   staff: Staff;
@@ -18,16 +20,33 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, incidents = [
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   
+  // Integração Financeira
+  const { invoices, setInvoices } = useData();
+  const { generatePayrollInvoice } = useInvoiceLogic({ invoices, onUpdateInvoices: setInvoices });
+  
+  // Lógica de Prévia de Folha
   const { calculateEstimatedSalary } = usePayrollLogic();
 
   // State temporário para novo dependente
   const [newDependent, setNewDependent] = useState<Partial<Dependent>>({ name: '', relation: 'filho', birthDate: '' });
   const [isAddingDependent, setIsAddingDependent] = useState(false);
 
+  // States para lançamento financeiro
+  const [showInvoiceConfirm, setShowInvoiceConfirm] = useState(false);
+  const [invoiceDueDate, setInvoiceDueDate] = useState('');
+
   // Sincroniza o form se a prop staff mudar externamente
   useEffect(() => {
     setFormData(staff);
   }, [staff]);
+
+  // Define data padrão (dia 05 do mês seguinte) apenas ao abrir o componente
+  useEffect(() => {
+      const nextMonth = new Date();
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      nextMonth.setDate(5);
+      setInvoiceDueDate(nextMonth.toISOString().split('T')[0]);
+  }, []);
 
   // --- CÁLCULO DE FOLHA (MÊS ATUAL) ---
   const payrollPreview = useMemo(() => {
@@ -36,6 +55,39 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, incidents = [
   }, [staff, incidents]);
 
   const hasHighDiscounts = payrollPreview.totalDiscounts > ((payrollPreview.base + payrollPreview.insalubrity) * 0.1);
+
+  // --- VERIFICAÇÃO DE DUPLICIDADE ---
+  const invoiceAlreadyGenerated = useMemo(() => {
+      const today = new Date();
+      const currentMonth = today.getMonth() + 1;
+      const currentYear = today.getFullYear();
+      
+      return invoices.some(inv => 
+          inv.staffId === staff.id && 
+          inv.type === 'expense' &&
+          inv.month === currentMonth &&
+          inv.year === currentYear
+      );
+  }, [invoices, staff.id]);
+
+  const handleLaunchToFinance = () => {
+      if (!invoiceDueDate) return;
+      
+      const today = new Date();
+      const monthName = today.toLocaleDateString('pt-BR', { month: 'long' });
+      const description = `Salário ${monthName}/${today.getFullYear()} - ${staff.name}`;
+
+      generatePayrollInvoice(
+          staff, 
+          payrollPreview.finalEstimate, 
+          invoiceDueDate, 
+          description
+      );
+
+      setShowInvoiceConfirm(false);
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 3000);
+  };
 
   const handleInputChange = (section: keyof Staff, field: string, value: any, nestedField?: string) => {
     let formattedValue = value;
@@ -459,6 +511,47 @@ export const StaffInfoTab: React.FC<StaffInfoTabProps> = ({ staff, incidents = [
 
             <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
                 <DollarSign className="w-40 h-40 text-white" />
+            </div>
+
+            {/* --- SEÇÃO DE LANÇAMENTO FINANCEIRO --- */}
+            <div className="relative z-10 mt-6 pt-4 border-t border-white/10">
+                {invoiceAlreadyGenerated ? (
+                    <div className="flex items-center gap-2 text-emerald-400 bg-emerald-900/30 p-3 rounded-lg border border-emerald-500/30 w-fit">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span className="font-bold text-sm">Fatura de Salário Gerada</span>
+                    </div>
+                ) : !showInvoiceConfirm ? (
+                    <button 
+                        onClick={() => setShowInvoiceConfirm(true)}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-lg transition-all flex items-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
+                    >
+                        <ArrowRight className="w-4 h-4" /> Lançar no Financeiro
+                    </button>
+                ) : (
+                    <div className="bg-slate-800 p-3 rounded-xl border border-slate-600 flex flex-col md:flex-row items-center gap-3 animate-in fade-in slide-in-from-top-1 w-full md:w-auto inline-flex">
+                        <span className="text-xs font-bold text-slate-300 whitespace-nowrap">Vencimento:</span>
+                        <input 
+                            type="date" 
+                            className="bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-white text-sm outline-none focus:border-emerald-500"
+                            value={invoiceDueDate}
+                            onChange={(e) => setInvoiceDueDate(e.target.value)}
+                        />
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <button 
+                                onClick={handleLaunchToFinance}
+                                className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-1.5 px-3 rounded text-xs transition-colors"
+                            >
+                                Confirmar
+                            </button>
+                            <button 
+                                onClick={() => setShowInvoiceConfirm(false)}
+                                className="flex-1 md:flex-none bg-slate-700 hover:bg-slate-600 text-white font-bold py-1.5 px-3 rounded text-xs transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
 

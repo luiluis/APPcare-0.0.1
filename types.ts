@@ -206,6 +206,7 @@ export interface Invoice {
   type: 'income' | 'expense';
   residentId?: string;
   branchId?: string;
+  staffId?: string; // Vínculo com funcionário para Folha de Pagamento
   month: number;
   year: number;
   status: InvoiceStatus | string; 

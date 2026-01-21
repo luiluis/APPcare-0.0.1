@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Invoice, InvoiceItem, InvoiceStatus, InvoiceCategory, CreateInvoiceDTO, QuickConsumeDTO, PaymentConfirmDTO, InvoicePayment } from '../types';
+import { Invoice, InvoiceItem, InvoiceStatus, InvoiceCategory, CreateInvoiceDTO, QuickConsumeDTO, PaymentConfirmDTO, InvoicePayment, Staff } from '../types';
 import { getLocalISOString } from '../lib/utils';
 
 interface UseInvoiceLogicProps {
@@ -142,6 +142,41 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
     onUpdateInvoices(updatedInvoices);
   };
 
+  /**
+   * Gera uma despesa de folha de pagamento vinculada ao funcionário.
+   */
+  const generatePayrollInvoice = (staff: Staff, amount: number, dueDate: string, description: string) => {
+    const newId = `inv-payroll-${Date.now()}`;
+    const dateObj = new Date(dueDate);
+    const month = dateObj.getMonth() + 1;
+    const year = dateObj.getFullYear();
+
+    const newInvoice: Invoice = {
+      id: newId,
+      type: 'expense',
+      branchId: staff.branchId,
+      staffId: staff.id, // Vínculo com RH
+      residentId: undefined,
+      month: month,
+      year: year,
+      status: InvoiceStatus.PENDING,
+      dueDate: dueDate,
+      totalAmount: amount,
+      supplier: staff.name, // Nome do funcionário como "Fornecedor"
+      items: [{
+        id: `item-${newId}`,
+        invoiceId: newId,
+        description: description,
+        amount: amount,
+        category: InvoiceCategory.SALARIO,
+        date: dueDate
+      }],
+      payments: []
+    };
+
+    onUpdateInvoices([...invoices, newInvoice]);
+  };
+
   const updateInvoiceStatus = (invoiceId: string, newStatus: InvoiceStatus | string) => {
     const updatedInvoices = invoices.map(inv => 
       inv.id === invoiceId ? { ...inv, status: newStatus } : inv
@@ -231,6 +266,7 @@ export const useInvoiceLogic = ({ invoices, onUpdateInvoices }: UseInvoiceLogicP
   return {
     createRecurringInvoices,
     addQuickConsume,
+    generatePayrollInvoice,
     updateInvoiceStatus,
     markAsPaidBatch,
     registerPayment
