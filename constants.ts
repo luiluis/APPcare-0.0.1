@@ -1,5 +1,39 @@
 
-import { Branch, BranchType, Resident, ResidentFinancialProfile, Staff, Invoice, InvoiceItem, Prescription, StockItem, Evolution, ResidentDocument, StaffDocument, StaffIncident } from './types';
+import { Branch, BranchType, Resident, ResidentFinancialProfile, Staff, Invoice, InvoiceItem, Prescription, StockItem, Evolution, ResidentDocument, StaffDocument, StaffIncident, FinancialCategory } from './types';
+
+// --- PLANO DE CONTAS PADRÃO (ILPI) ---
+export const DEFAULT_PLAN_OF_ACCOUNTS: FinancialCategory[] = [
+    // RECEITAS (Nível 1)
+    { id: 'cat_rec_root', name: 'Receitas Operacionais', type: 'income', isSystemDefault: true },
+    // Nível 2
+    { id: 'cat_rec_mensal', name: 'Mensalidades', parentId: 'cat_rec_root', type: 'income', isSystemDefault: true },
+    { id: 'cat_rec_extra', name: 'Serviços Extras / Farmácia', parentId: 'cat_rec_root', type: 'income', isSystemDefault: true },
+    { id: 'cat_rec_doacao', name: 'Doações', parentId: 'cat_rec_root', type: 'income', isSystemDefault: false },
+
+    // DESPESAS (Nível 1)
+    { id: 'cat_desp_root', name: 'Despesas Operacionais', type: 'expense', isSystemDefault: true },
+    
+    // Pessoal (Nível 2)
+    { id: 'cat_pes_root', name: 'Pessoal & Encargos', parentId: 'cat_desp_root', type: 'expense', isSystemDefault: true },
+    { id: 'cat_pes_sal', name: 'Salários Líquidos', parentId: 'cat_pes_root', type: 'expense' },
+    { id: 'cat_pes_enc', name: 'Impostos (INSS/FGTS)', parentId: 'cat_pes_root', type: 'expense' },
+    { id: 'cat_pes_ben', name: 'Benefícios (VT/VR)', parentId: 'cat_pes_root', type: 'expense' },
+
+    // Operacional (Nível 2)
+    { id: 'cat_ops_root', name: 'Custos Operacionais', parentId: 'cat_desp_root', type: 'expense', isSystemDefault: true },
+    { id: 'cat_ops_alim', name: 'Alimentação', parentId: 'cat_ops_root', type: 'expense' },
+    { id: 'cat_ops_farm', name: 'Farmácia & Insumos', parentId: 'cat_ops_root', type: 'expense' }, // Vinculado ao estoque
+    { id: 'cat_ops_manut', name: 'Manutenção Predial', parentId: 'cat_ops_root', type: 'expense' },
+    { id: 'cat_ops_util', name: 'Utilidades (Luz/Água/Net)', parentId: 'cat_ops_root', type: 'expense' },
+
+    // Administrativo (Nível 2)
+    { id: 'cat_adm_root', name: 'Despesas Administrativas', parentId: 'cat_desp_root', type: 'expense', isSystemDefault: true },
+    { id: 'cat_adm_sys', name: 'Sistemas & Software', parentId: 'cat_adm_root', type: 'expense' },
+    { id: 'cat_adm_cont', name: 'Contabilidade & Jurídico', parentId: 'cat_adm_root', type: 'expense' },
+
+    // Impostos (Nível 2)
+    { id: 'cat_tax_root', name: 'Impostos sobre Nota', parentId: 'cat_desp_root', type: 'expense', isSystemDefault: true },
+];
 
 export const BRANCHES: Branch[] = [
   { id: 'b1', name: 'Casa Repouso Matriz (Centro)', type: BranchType.MATRIZ },
@@ -134,7 +168,6 @@ export const MOCK_PRESCRIPTIONS: Prescription[] = [
     { id: 'p3', residentId: 'res-1', medication: 'Quetiapina', dosage: '25mg', times: ['21:00'], active: true }
 ];
 
-// Added unitPrice for cost tracking
 export const MOCK_STOCK: StockItem[] = [
     { id: 's1', residentId: 'res-1', name: 'Fralda Geriátrica G', category: 'hygiene', quantity: 18, unit: 'unidades', minThreshold: 20, avgConsumption: '4/dia', unitPrice: 250 },
     { id: 's2', residentId: 'res-1', name: 'Lenço Umedecido', category: 'hygiene', quantity: 2, unit: 'pacotes', minThreshold: 1, avgConsumption: '1 pcte/sem', unitPrice: 890 },
@@ -358,7 +391,8 @@ export const MOCK_INVOICES: Invoice[] = MOCK_RESIDENTS.map((r, i) => {
   // Recalcula totais usando centavos do perfil financeiro
   const baseAmount = feeConfig ? (feeConfig.baseValue + feeConfig.careLevelAdjustment + feeConfig.fixedExtras - feeConfig.discount) : (financialProfile?.benefitValue || 0);
   
-  const items: InvoiceItem[] = [{ id: `item-base-${i}`, invoiceId: `inv-${i}`, description: 'Mensalidade Base', amount: baseAmount, category: 'mensalidade', date: '2023-10-01' }];
+  // Atualizado para usar string ID da categoria (cat_rec_mensal)
+  const items: InvoiceItem[] = [{ id: `item-base-${i}`, invoiceId: `inv-${i}`, description: 'Mensalidade Base', amount: baseAmount, category: 'cat_rec_mensal', date: '2023-10-01' }];
   const status = i === 0 ? 'pending' : 'paid';
   return { 
     id: `inv-${i}`, 

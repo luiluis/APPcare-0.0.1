@@ -8,28 +8,28 @@ export interface Branch {
   id: string;
   name: string;
   type: BranchType;
-  bankConfig?: BankIntegrationConfig; // Nova configuração bancária por unidade
+  bankConfig?: BankIntegrationConfig;
 }
 
 export interface BankIntegrationConfig {
-  bankCode: string; // Ex: 341 (Itaú)
+  bankCode: string;
   agency: string;
   account: string;
   accountDigit: string;
-  wallet: string; // Carteira de cobrança (Ex: 109)
-  agreementNumber?: string; // Número do convênio
+  wallet: string;
+  agreementNumber?: string;
 }
 
 export interface BoletoRecord {
   id: string;
   invoiceId: string;
-  nossoNumero: string; // Identificador único no banco
+  nossoNumero: string;
   barcode: string;
   digitableLine: string;
   status: 'generated' | 'remittance_sent' | 'registered' | 'paid' | 'rejected';
   generatedAt: string;
   dueDate: string;
-  value: number; // Em centavos
+  value: number;
 }
 
 export interface AuthUser {
@@ -51,27 +51,27 @@ export interface Contact {
   isEmergencyContact?: boolean; 
 }
 
-// --- DOMÍNIO FINANCEIRO DO RESIDENTE (SEGREGADO) ---
+// --- DOMÍNIO FINANCEIRO DO RESIDENTE ---
 
 export interface ContractRecord {
   id: string;
-  startDate: string;      // Início da vigência deste valor
-  endDate?: string;       // Fim da vigência (null = atual)
-  baseValue: number;      // Em centavos
+  startDate: string;
+  endDate?: string;
+  baseValue: number;
   careLevelAdjustment: number;
   fixedExtras: number;
   discount: number;
-  readjustmentIndex?: string; // Ex: 'IPCA', 'IGPM', 'Manual', 'Aditivo'
+  readjustmentIndex?: string;
   notes?: string;
 }
 
 export interface FeeConfig {
-  baseValue: number;          // Em centavos (R$ 10,00 -> 1000)
-  careLevelAdjustment: number; // Em centavos
-  fixedExtras: number;        // Em centavos
-  discount: number;           // Em centavos
-  notes: string;              
-  paymentDay: number;         
+  baseValue: number;
+  careLevelAdjustment: number;
+  fixedExtras: number;
+  discount: number;
+  notes: string;
+  paymentDay: number;
 }
 
 export interface ResidentFinancialProfile {
@@ -79,10 +79,21 @@ export interface ResidentFinancialProfile {
   residentId: string;
   feeConfig?: FeeConfig; 
   contractHistory?: ContractRecord[];
-  benefitValue?: number; // Em centavos (LOAS/BPC)
+  benefitValue?: number;
 }
 
-// --- BATCH PROCESS DTOs (Novos) ---
+// --- PLANO DE CONTAS (NOVO) ---
+
+export interface FinancialCategory {
+  id: string;
+  name: string;
+  parentId?: string | null; // Hierarquia
+  type: 'income' | 'expense';
+  isSystemDefault?: boolean;
+  level?: number; // Auxiliar para UI (indentação)
+}
+
+// --- DTOs BATCH ---
 
 export interface BatchReadjustmentPreview {
   residentId: string;
@@ -99,28 +110,28 @@ export interface BatchReadjustmentResult {
   details: string[];
 }
 
-// --- CONFIGURAÇÃO FISCAL (Payroll) ---
+// --- CONFIGURAÇÃO FISCAL ---
 
 export interface TaxBracket {
-  limit: number; // Teto da faixa em centavos
-  rate: number;  // Alíquota (0.075, 0.09, etc)
-  deduction?: number; // Parcela a deduzir em centavos (IRRF)
+  limit: number;
+  rate: number;
+  deduction?: number;
 }
 
 export interface TaxTable {
   year: number;
-  minWage: number; // Salário mínimo em centavos
-  ceiling: number; // Teto do INSS em centavos
-  brackets: TaxBracket[]; // Faixas progressivas
+  minWage: number;
+  ceiling: number;
+  brackets: TaxBracket[];
 }
 
 export interface PayrollLineItem {
   id: string;
   label: string;
   type: 'earning' | 'deduction';
-  amount: number; // Em centavos
-  reference?: string; // Ex: "7.5%", "20%", "2 dias"
-  description?: string; // Detalhe técnico ou memória de cálculo
+  amount: number;
+  reference?: string;
+  description?: string;
 }
 
 export interface PayrollCalculationResult {
@@ -128,7 +139,7 @@ export interface PayrollCalculationResult {
   grossTotal: number;
   discountTotal: number;
   netTotal: number;
-  baseSalary: number; // Mantido para referência rápida
+  baseSalary: number;
 }
 
 // --- ENTIDADES RELACIONAIS ---
@@ -137,7 +148,7 @@ export type DocumentCategory = 'contract' | 'identity' | 'medical' | 'other';
 
 export interface ResidentDocument {
   id: string;
-  residentId: string; // FK
+  residentId: string;
   title: string;
   category: DocumentCategory;
   url: string;
@@ -183,7 +194,7 @@ export interface MedicalRecord {
 
 export interface Prescription {
   id: string;
-  residentId: string; // FK
+  residentId: string;
   medication: string;
   dosage: string;
   times: string[];
@@ -195,16 +206,16 @@ export interface Prescription {
 export interface MedicationLog {
   id: string;
   prescriptionId: string;
-  administeredAt: string; // ISO String
-  administeredBy: string; // Nome ou ID do usuário
+  administeredAt: string;
+  administeredBy: string;
   status: 'administered' | 'refused';
   notes?: string;
-  scheduledTime: string; // O horário que estava previsto (ex: '08:00')
+  scheduledTime: string;
 }
 
 export interface StockItem {
   id: string;
-  residentId: string; // FK
+  residentId: string;
   name: string;
   category: 'hygiene' | 'medication' | 'other';
   quantity: number;
@@ -213,24 +224,25 @@ export interface StockItem {
   avgConsumption?: string;
   status?: 'ok' | 'low' | 'ordered';
   lastOrderDate?: string;
-  batch?: string; // Número do lote para rastreabilidade
-  expirationDate?: string; // Data de validade para controle sanitário
-  unitPrice?: number; // Preço unitário em centavos para rastreio de custo
+  batch?: string;
+  expirationDate?: string;
+  unitPrice?: number;
 }
 
 export interface FinancialMovement {
   id: string;
-  type: 'stock_usage'; // Expansível futuramente
-  relatedId: string; // ID do log de medicação ou outro evento
-  amount: number; // Custo em centavos
+  type: 'stock_usage';
+  relatedId: string;
+  amount: number;
   description: string;
   date: string;
-  branchId: string; // Para centro de custo
+  branchId: string;
+  categoryId?: string; // Vinculo com Plano de Contas
 }
 
 export interface Evolution {
   id: string;
-  residentId: string; // FK
+  residentId: string;
   date: string;
   author: string;
   role: string;
@@ -249,9 +261,9 @@ export interface IncidentReport {
   type: IncidentType;
   severity: IncidentSeverity;
   description: string;
-  photos: string[]; // URLs
+  photos: string[];
   familyNotified: boolean;
-  date: string; // ISO String
+  date: string;
   author: string;
 }
 
@@ -267,37 +279,33 @@ export interface AuditLog {
   category: 'medical' | 'financial' | 'operational' | 'system';
 }
 
-export enum InvoiceCategory {
-  MENSALIDADE = 'mensalidade',
-  FARMACIA = 'farmacia',
-  TERAPIA = 'terapia',
-  INSUMOS = 'insumos',
-  LUZ = 'luz',
-  AGUA = 'agua',
-  ALUGUEL = 'aluguel',
-  MANUTENCAO = 'manutencao',
-  SALARIO = 'salario',
-  OUTROS = 'outros'
-}
-
 export enum InvoiceStatus {
   PENDING = 'pending',
   PAID = 'paid',
   OVERDUE = 'overdue'
 }
 
+export enum InvoiceCategory {
+  MENSALIDADE = 'mensalidade',
+  FARMACIA = 'farmacia',
+  ALIMENTACAO = 'alimentacao',
+  MANUTENCAO = 'manutencao',
+  SALARIO = 'salario',
+  OUTROS = 'outros'
+}
+
 export interface InvoiceItem {
   id: string;
   invoiceId: string;
   description: string;
-  amount: number; // Em centavos (INTEGER)
-  category: InvoiceCategory | string;
+  amount: number; // Em centavos
+  category: string; // ID da Categoria do Plano de Contas
   date: string;
 }
 
 export interface InvoicePayment {
   id: string;
-  amount: number; // Em centavos (INTEGER)
+  amount: number;
   date: string;
   method: string;
   notes?: string;
@@ -307,7 +315,7 @@ export interface RecurrenceConfig {
   active: boolean;
   frequency: 'monthly' | 'yearly';
   currentInstallment: number;
-  totalInstallments?: number; // Se undefined, é recorrente infinito
+  totalInstallments?: number;
   nextDueDate?: string;
 }
 
@@ -316,28 +324,29 @@ export interface Invoice {
   type: 'income' | 'expense';
   residentId?: string;
   branchId?: string;
-  staffId?: string; // Vínculo com funcionário para Folha de Pagamento
+  staffId?: string;
   month: number;
   year: number;
   status: InvoiceStatus | string; 
   dueDate: string;
-  totalAmount: number; // Em centavos (INTEGER)
+  totalAmount: number;
   items: InvoiceItem[];
   payments: InvoicePayment[];
-  paidAmount?: number; // Em centavos (INTEGER)
+  paidAmount?: number;
   paymentDate?: string;
   paymentMethod?: string;
   paymentAccount?: string;
   attachmentUrl?: string;
   supplier?: string;
-  recurrence?: RecurrenceConfig; // Nova definição de recorrência
-  boleto?: BoletoRecord; // Dados do boleto gerado
+  recurrence?: RecurrenceConfig;
+  boleto?: BoletoRecord;
+  category?: string; // ID da Categoria Principal (atalho)
 }
 
 export interface FinancialRecord {
   id: string;
   description: string;
-  amount: number; // Em centavos
+  amount: number;
   type: 'income' | 'expense';
   category: string;
   date: string;
@@ -356,39 +365,37 @@ export interface Dependent {
 }
 
 export interface StaffBenefits {
-  receivesTransportVoucher: boolean; // Vale Transporte
+  receivesTransportVoucher: boolean;
   transportVoucherDailyQty?: number;
-  transportVoucherUnitValue?: number; // Em centavos se armazenado, mas no front pode vir como float
-  receivesMealVoucher: boolean; // Vale Refeição
+  transportVoucherUnitValue?: number;
+  receivesMealVoucher: boolean;
 }
 
 export interface StaffSystemAccess {
   allowed: boolean;
   accessLevel: 'admin' | 'financeiro' | 'enfermagem' | 'basico';
   loginEmail: string;
-  lastLogin?: string | null; // Data ISO do último acesso ou null se nunca acessou
+  lastLogin?: string | null;
 }
 
 export interface VacationRecord {
   id: string;
-  periodStart: string; // Início do gozo (ISO)
-  periodEnd: string;   // Fim do gozo (ISO)
-  referencePeriodStart: string; // Início do período aquisitivo (ISO)
-  referencePeriodEnd: string;   // Fim do período aquisitivo (ISO)
+  periodStart: string;
+  periodEnd: string;
+  referencePeriodStart: string;
+  referencePeriodEnd: string;
   status: 'scheduled' | 'completed' | 'canceled';
-  soldDays?: number; // Abono pecuniário (venda de dias)
+  soldDays?: number;
 }
 
 export interface Staff {
   id: string;
   name: string;
-  role: string; // Usado para permissões do sistema
+  role: string;
   branchId: string;
   created_at?: string;
   photo?: string;
   active: boolean;
-
-  // Dados Pessoais
   personalInfo?: {
     cpf: string;
     rg: string;
@@ -397,29 +404,20 @@ export interface Staff {
     email: string;
     address: string;
     maritalStatus: 'solteiro' | 'casado' | 'divorciado' | 'viuvo' | 'uniao_estavel';
-    childrenCount: number; // Mantido para compatibilidade, mas o array dependents é mais preciso
+    childrenCount: number;
   };
-
-  // Dados Contratuais
   contractInfo?: {
     admissionDate: string;
-    jobTitle: string; // Cargo oficial na carteira
+    jobTitle: string;
     department: 'enfermagem' | 'limpeza' | 'cozinha' | 'administrativo' | 'manutencao';
     scale: '12x36' | '6x1' | '5x2' | 'outra';
     workShift: 'diurno' | 'noturno';
   };
-
-  // Histórico de Férias
   vacationHistory?: VacationRecord[];
-
-  // Acesso ao Sistema (Novo)
   systemAccess?: StaffSystemAccess;
-
-  // Financeiro
   financialInfo?: {
-    baseSalary: number; // Em centavos (R$ 2000,00 -> 200000)
+    baseSalary: number;
     insalubridadeLevel: 0 | 20 | 40;
-    // Lista de descontos/adicionais fixos (ex: Plano de Saúde, Empréstimo)
     customDeductions?: { id: string; description: string; amount: number }[]; 
     bankInfo: {
       banco?: string;
@@ -429,12 +427,8 @@ export interface Staff {
       pixKey?: string;
     };
   };
-
-  // Novo Módulo CLT
   benefits?: StaffBenefits;
   dependents?: Dependent[];
-
-  // Profissional
   professionalInfo?: {
     corenNumber?: string;
     corenState?: string;
@@ -445,13 +439,13 @@ export type StaffDocumentCategory = 'aso' | 'contract' | 'identity' | 'certifica
 
 export interface StaffDocument {
   id: string;
-  staffId: string; // FK
+  staffId: string;
   title: string;
   category: StaffDocumentCategory;
   url: string;
   type: 'pdf' | 'image';
   createdAt: string;
-  expirationDate?: string; // Para ASO, Coren, Certificações
+  expirationDate?: string;
   description?: string;
 }
 
@@ -459,13 +453,13 @@ export type StaffIncidentType = 'advertencia' | 'suspensao' | 'atestado' | 'falt
 
 export interface StaffIncident {
   id: string;
-  staffId: string; // FK
+  staffId: string;
   type: StaffIncidentType;
   date: string;
   description: string;
   attachmentUrl?: string;
   createdAt: string;
-  financialImpact?: number; // Em centavos
+  financialImpact?: number;
   impactDescription?: string;
 }
 
@@ -474,9 +468,9 @@ export interface HRAlert {
   staffId: string;
   staffName: string;
   type: 'contract' | 'vacation' | 'document';
-  severity: 'high' | 'medium'; // high = vencido, medium = vencendo
+  severity: 'high' | 'medium';
   message: string;
-  date?: string; // Data de vencimento relevante
+  date?: string;
 }
 
 // --- DTOs ---
