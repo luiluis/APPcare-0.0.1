@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Resident, StockItem } from '../../../types';
-import { Package, AlertTriangle, MinusCircle, PlusCircle, ShoppingCart, Send, Edit2, Trash2, X, CheckCircle, Clock, AlertOctagon, Calendar } from 'lucide-react';
+import { Package, AlertTriangle, MinusCircle, PlusCircle, ShoppingCart, Send, Edit2, Trash2, X, CheckCircle, Clock, AlertOctagon, Calendar, Layers, ArrowRight } from 'lucide-react';
 
 interface StockTabProps {
   resident: Resident;
@@ -14,7 +14,13 @@ export const StockTab: React.FC<StockTabProps> = ({ resident, onUpdateResident }
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<StockItem | null>(null);
 
-  // Added residentId to satisfy StockItem interface
+  // Estado para Seleção de Lote (Rastreabilidade)
+  const [batchModal, setBatchModal] = useState<{
+      isOpen: boolean;
+      itemName: string;
+      candidates: StockItem[];
+  }>({ isOpen: false, itemName: '', candidates: [] });
+
   const initialFormState: StockItem = { 
     id: '', 
     residentId: resident.id,
@@ -29,26 +35,60 @@ export const StockTab: React.FC<StockTabProps> = ({ resident, onUpdateResident }
   };
   const [form, setForm] = useState<StockItem>(initialFormState);
 
-  // --- SORTING & LOGIC ---
-  const sortedStock = useMemo(() => {
+  // --- GROUPING LOGIC (Aggregation) ---
+  // Agrupa itens pelo Nome + Categoria para visualização unificada
+  const groupedStock = useMemo(() => {
     if (!stock) return [];
     
-    return [...stock].sort((a, b) => {
-        // Prioridade 1: Itens com validade definida aparecem antes
-        if (a.expirationDate && !b.expirationDate) return -1;
-        if (!a.expirationDate && b.expirationDate) return 1;
+    const groups: Record<string, { 
+        items: StockItem[], 
+        totalQty: number, 
+        nearestExpiration: string | null,
+        hasExpired: boolean,
+        hasLowStock: boolean 
+    }> = {};
 
-        // Prioridade 2: Menor data de validade primeiro (Vencidos -> A Vencer)
-        if (a.expirationDate && b.expirationDate) {
-            return new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime();
+    stock.forEach(item => {
+        // Normaliza chave para agrupar (Case insensitive)
+        const key = `${item.name.trim().toLowerCase()}|${item.category}`;
+        
+        if (!groups[key]) {
+            groups[key] = { 
+                items: [], 
+                totalQty: 0, 
+                nearestExpiration: null,
+                hasExpired: false,
+                hasLowStock: false
+            };
         }
 
-        // Prioridade 3: Estoque baixo
-        const aLow = a.quantity <= a.minThreshold;
-        const bLow = b.quantity <= b.minThreshold;
-        if (aLow && !bLow) return -1;
-        if (!aLow && bLow) return 1;
+        groups[key].items.push(item);
+        groups[key].totalQty += item.quantity;
 
+        // Lógica de validade do grupo (pega a pior situação)
+        if (item.expirationDate) {
+            const expDate = new Date(item.expirationDate);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+
+            if (expDate < today) groups[key].hasExpired = true;
+            
+            // Atualiza a validade mais próxima
+            if (!groups[key].nearestExpiration || new Date(groups[key].nearestExpiration!) > expDate) {
+                groups[key].nearestExpiration = item.expirationDate;
+            }
+        }
+
+        // Se a soma total for baixa, marca (mas verificado individualmente na UI)
+        if (item.quantity <= item.minThreshold) groups[key].hasLowStock = true;
+    });
+
+    // Converte de volta para array para renderização
+    return Object.values(groups).sort((a, b) => {
+        // Prioridade visual: Vencidos > Baixo Estoque > Normal
+        if (a.hasExpired && !b.hasExpired) return -1;
+        if (!a.hasExpired && b.hasExpired) return 1;
+        if (a.totalQty <= a.items[0].minThreshold && b.totalQty > b.items[0].minThreshold) return -1;
         return 0;
     });
   }, [stock]);
@@ -68,7 +108,7 @@ export const StockTab: React.FC<StockTabProps> = ({ resident, onUpdateResident }
   };
 
   const handleDelete = (id: string) => {
-    if (confirm("Remover este item do estoque?")) {
+    if (confirm("Remover este lote do estoque?")) {
         const updatedStock = (stock || []).filter(s => s.id !== id);
         onUpdateResident({ ...resident, stock: updatedStock });
     }
@@ -87,17 +127,54 @@ export const StockTab: React.FC<StockTabProps> = ({ resident, onUpdateResident }
     setIsEditModalOpen(false);
   };
 
-  const handleQuickSubtract = (item: StockItem) => {
-     if (item.quantity > 0) {
-        const updatedStock = (stock || []).map(s => s.id === item.id ? { ...s, quantity: s.quantity - 1 } : s);
-        onUpdateResident({ ...resident, stock: updatedStock });
+  /**
+   * LÓGICA DE BAIXA INTELIGENTE (FEFO Compliance)
+   * 1. Se houver apenas 1 lote com saldo: Baixa direto.
+   * 2. Se houver múltiplos lotes com saldo: Abre Modal de Seleção.
+   */
+  const handleSmartSubtract = (groupItems: StockItem[]) => {
+     // Filtra apenas lotes que têm saldo para baixar
+     const activeBatches = groupItems.filter(i => i.quantity > 0);
+
+     if (activeBatches.length === 0) {
+         alert("Estoque zerado. Não é possível registrar uso.");
+         return;
+     }
+
+     if (activeBatches.length === 1) {
+         // Caso Simples: Só tem 1 lote disponível, baixa direto.
+         executeDecrement(activeBatches[0].id);
+     } else {
+         // Caso Complexo: Múltiplos lotes. Obriga o usuário a escolher (Rastreabilidade).
+         // Ordena por FEFO (First Expired, First Out)
+         const sortedCandidates = activeBatches.sort((a, b) => {
+             if (a.expirationDate && !b.expirationDate) return -1;
+             if (!a.expirationDate && b.expirationDate) return 1;
+             if (a.expirationDate && b.expirationDate) {
+                 return new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime();
+             }
+             return 0; // Se não tiver validade, mantém ordem
+         });
+
+         setBatchModal({
+             isOpen: true,
+             itemName: activeBatches[0].name,
+             candidates: sortedCandidates
+         });
      }
   };
 
+  const executeDecrement = (itemId: string) => {
+      const updatedStock = (stock || []).map(s => s.id === itemId ? { ...s, quantity: s.quantity - 1 } : s);
+      onUpdateResident({ ...resident, stock: updatedStock });
+      setBatchModal({ isOpen: false, itemName: '', candidates: [] });
+  };
+
   const handleRequestReposition = (item: StockItem) => {
-     // Persist Order Status locally on the item
+     // Marca todos os itens do grupo como 'ordered' (simplificação)
+     // Na prática, criaria um pedido de compra
      const updatedStock = (stock || []).map(s => 
-        s.id === item.id ? { 
+        s.name === item.name ? { 
             ...s, 
             status: 'ordered', 
             lastOrderDate: new Date().toLocaleDateString('pt-BR') 
@@ -110,101 +187,82 @@ export const StockTab: React.FC<StockTabProps> = ({ resident, onUpdateResident }
   const labelStyle = "block text-sm font-semibold text-gray-700 mb-1.5";
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative pb-20">
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {sortedStock.map(item => {
-          const isLow = item.quantity <= item.minThreshold;
-          const isOrdered = item.status === 'ordered';
-
-          // Lógica de Vencimento
-          const today = new Date();
-          today.setHours(0,0,0,0);
+        {groupedStock.map(group => {
+          const mainItem = group.items[0]; // Item de referência para dados estáticos (nome, unidade)
+          const isMultiple = group.items.length > 1;
+          const isLow = group.totalQty <= mainItem.minThreshold;
           
-          let isExpired = false;
-          let isExpiringSoon = false;
-
-          if (item.expirationDate) {
-              const expDate = new Date(item.expirationDate);
-              // Ajuste simples para garantir comparação correta da string YYYY-MM-DD
-              expDate.setHours(0,0,0,0);
-              
-              isExpired = expDate < today;
-              
-              const thirtyDaysFromNow = new Date(today);
-              thirtyDaysFromNow.setDate(today.getDate() + 30);
-              
-              isExpiringSoon = !isExpired && expDate <= thirtyDaysFromNow;
-          }
+          // Verifica status de pedido (se qualquer um do grupo foi pedido)
+          const isOrdered = group.items.some(i => i.status === 'ordered');
 
           // Definição de Estilos baseada na prioridade: Vencido > Vencendo > Baixo > Normal
           let cardClasses = "bg-white border-gray-100";
-          if (isExpired) cardClasses = "bg-red-50 border-red-300 ring-1 ring-red-200";
-          else if (isExpiringSoon) cardClasses = "bg-amber-50 border-amber-300 ring-1 ring-amber-200";
+          if (group.hasExpired) cardClasses = "bg-red-50 border-red-300 ring-1 ring-red-200";
           else if (isLow && !isOrdered) cardClasses = "bg-rose-50 border-rose-200";
 
           return (
-            <div key={item.id} className={`p-5 rounded-xl border shadow-sm hover:shadow-md transition-all flex flex-col justify-between group relative ${cardClasses}`}>
+            <div key={mainItem.id} className={`p-5 rounded-xl border shadow-sm hover:shadow-md transition-all flex flex-col justify-between group relative ${cardClasses}`}>
               
-              {/* Edit Controls (Hover) */}
+              {/* Controls (Show Individual Items on Edit) */}
               <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  <button onClick={() => handleOpenEdit(item)} className="p-1.5 bg-white/80 hover:bg-blue-100 text-gray-500 hover:text-blue-600 rounded-lg shadow-sm"><Edit2 className="w-3.5 h-3.5"/></button>
-                  <button onClick={() => handleDelete(item.id)} className="p-1.5 bg-white/80 hover:bg-red-100 text-gray-500 hover:text-red-600 rounded-lg shadow-sm"><Trash2 className="w-3.5 h-3.5"/></button>
+                  {/* Se for multiplo, o edit precisa abrir uma lista ou algo mais complexo. 
+                      Para este protótipo, editamos o primeiro ou abrimos o modal de add como 'novo lote' */}
+                  <button onClick={() => handleOpenAdd()} className="p-1.5 bg-white/80 hover:bg-blue-100 text-gray-500 hover:text-blue-600 rounded-lg shadow-sm" title="Adicionar Novo Lote"><PlusCircle className="w-3.5 h-3.5"/></button>
               </div>
 
               <div>
                 <div className="flex justify-between items-start mb-3">
-                  <div className={`p-2.5 rounded-lg ${isExpired ? 'bg-red-200 text-red-700' : isExpiringSoon ? 'bg-amber-200 text-amber-700' : isLow ? 'bg-white/60 text-red-500' : 'bg-gray-100 text-gray-600'}`}>
-                      {isExpired ? <AlertOctagon className="w-6 h-6" /> : isExpiringSoon ? <Calendar className="w-6 h-6" /> : <Package className="w-6 h-6" />}
+                  <div className={`p-2.5 rounded-lg ${group.hasExpired ? 'bg-red-200 text-red-700' : isLow ? 'bg-white/60 text-red-500' : 'bg-gray-100 text-gray-600'}`}>
+                      {group.hasExpired ? <AlertOctagon className="w-6 h-6" /> : isMultiple ? <Layers className="w-6 h-6" /> : <Package className="w-6 h-6" />}
                   </div>
                   
                   {/* Badges de Status */}
-                  <div className="flex flex-col items-end gap-1 mr-14">
-                      {isExpired && (
+                  <div className="flex flex-col items-end gap-1 mr-10">
+                      {group.hasExpired && (
                         <span className="bg-red-600 text-white px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 shadow-sm animate-pulse">
                           <X className="w-3 h-3" /> VENCIDO
                         </span>
                       )}
-                      {isExpiringSoon && (
-                        <span className="bg-amber-500 text-white px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 shadow-sm">
-                          <AlertTriangle className="w-3 h-3" /> VENCE EM BREVE
+                      {isMultiple && (
+                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1">
+                          <Layers className="w-3 h-3" /> {group.items.length} Lotes
                         </span>
                       )}
-                      {isOrdered ? (
-                         <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1">
-                            <Clock className="w-3 h-3" /> Solicitado
-                         </span>
-                      ) : isLow && !isExpired && (
+                      {isLow && !isOrdered && !group.hasExpired && (
                         <span className="bg-rose-100 text-rose-600 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" /> BAIXO ESTOQUE
+                          <AlertTriangle className="w-3 h-3" /> BAIXO
                         </span>
                       )}
                   </div>
                 </div>
 
-                <h4 className="font-bold text-gray-800 text-lg mb-1 pr-2 truncate">{item.name}</h4>
+                <h4 className="font-bold text-gray-800 text-lg mb-1 pr-2 truncate">{mainItem.name}</h4>
                 <div className="flex justify-between items-center mb-4">
-                  <p className="text-xs text-gray-500 uppercase font-semibold">{item.category}</p>
-                  {item.expirationDate && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isExpired ? 'bg-red-200 text-red-800' : isExpiringSoon ? 'bg-amber-200 text-amber-800' : 'bg-gray-100 text-gray-500'}`}>
-                          Val: {new Date(item.expirationDate).toLocaleDateString('pt-BR')}
+                  <p className="text-xs text-gray-500 uppercase font-semibold">{mainItem.category}</p>
+                  {group.nearestExpiration && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${group.hasExpired ? 'bg-red-200 text-red-800' : 'bg-gray-100 text-gray-500'}`}>
+                          {isMultiple ? 'Vence próx: ' : 'Val: '} 
+                          {new Date(group.nearestExpiration).toLocaleDateString('pt-BR')}
                       </span>
                   )}
                 </div>
                 
                 <div className="flex items-end gap-1 mb-6">
-                  <span className={`text-4xl font-bold ${isLow ? 'text-red-600' : 'text-gray-900'}`}>{item.quantity}</span>
-                  <span className={`text-sm font-medium mb-1.5 ${isLow ? 'text-red-400' : 'text-gray-500'}`}>{item.unit}</span>
+                  <span className={`text-4xl font-bold ${isLow ? 'text-red-600' : 'text-gray-900'}`}>{group.totalQty}</span>
+                  <span className={`text-sm font-medium mb-1.5 ${isLow ? 'text-red-400' : 'text-gray-500'}`}>{mainItem.unit}</span>
                 </div>
               </div>
 
               {/* Ações */}
               <div className="flex flex-col gap-2">
                  <button 
-                    onClick={() => handleQuickSubtract(item)}
-                    disabled={isExpired}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-colors border
-                        ${isExpired 
+                    onClick={() => handleSmartSubtract(group.items)}
+                    disabled={group.totalQty <= 0}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-colors border shadow-sm
+                        ${group.hasExpired
                             ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' 
                             : 'bg-white border-rose-200 hover:bg-rose-50 text-rose-700'
                         }`}
@@ -212,21 +270,30 @@ export const StockTab: React.FC<StockTabProps> = ({ resident, onUpdateResident }
                     <MinusCircle className="w-4 h-4" /> Registrar Uso (-1)
                  </button>
                  
-                 {isLow && !isOrdered && !isExpired && (
+                 {/* Visualizar Lotes (Se Multiplo) ou Editar (Se Único) */}
+                 {isMultiple ? (
+                     <button 
+                        onClick={() => handleSmartSubtract(group.items)} // Reutiliza o modal de seleção para visualização rápida também
+                        className="w-full text-xs text-blue-600 font-bold hover:underline py-1"
+                     >
+                         Ver Detalhes dos Lotes
+                     </button>
+                 ) : (
+                     <button 
+                        onClick={() => handleOpenEdit(mainItem)}
+                        className="w-full text-xs text-gray-400 hover:text-gray-600 font-medium py-1 flex items-center justify-center gap-1"
+                     >
+                         <Edit2 className="w-3 h-3"/> Editar Detalhes
+                     </button>
+                 )}
+
+                 {isLow && !isOrdered && !group.hasExpired && (
                     <button 
-                        onClick={() => handleRequestReposition(item)}
-                        className="w-full flex items-center justify-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 py-2.5 rounded-lg text-sm font-bold transition-colors border border-amber-200" 
-                        title="Notificar família ou financeiro"
+                        onClick={() => handleRequestReposition(mainItem)}
+                        className="w-full flex items-center justify-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 py-2.5 rounded-lg text-sm font-bold transition-colors border border-amber-200 mt-1" 
                     >
                         <Send className="w-4 h-4" /> Solicitar Reposição
                     </button>
-                 )}
-                 
-                 {isOrdered && (
-                    <div className="w-full flex flex-col items-center justify-center bg-gray-50 text-gray-500 py-2 rounded-lg text-xs font-medium border border-gray-100">
-                        <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3"/> Aguardando Chegada</span>
-                        <span className="text-[10px] text-gray-400">Solicitado em: {item.lastOrderDate}</span>
-                    </div>
                  )}
               </div>
             </div>
@@ -352,6 +419,69 @@ export const StockTab: React.FC<StockTabProps> = ({ resident, onUpdateResident }
               </div>
            </div>
         </div>
+      )}
+
+      {/* --- MODAL DE SELEÇÃO DE LOTE (RASTREABILIDADE) --- */}
+      {batchModal.isOpen && (
+          <div className="fixed inset-0 bg-black/60 z-[80] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
+                  <div className="flex justify-between items-center mb-4">
+                      <div className="flex items-center gap-3">
+                          <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                              <Layers className="w-5 h-5" />
+                          </div>
+                          <div>
+                              <h3 className="text-lg font-bold text-gray-900">Selecione o Lote</h3>
+                              <p className="text-xs text-gray-500">Qual lote será utilizado?</p>
+                          </div>
+                      </div>
+                      <button onClick={() => setBatchModal({isOpen: false, itemName: '', candidates: []})}><X className="w-6 h-6 text-gray-400" /></button>
+                  </div>
+
+                  <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4 text-sm text-blue-800">
+                      <strong>Item:</strong> {batchModal.itemName}
+                  </div>
+
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                      {batchModal.candidates.map((batch, idx) => {
+                          const isRecommended = idx === 0; // Primeiro item é o FEFO (mais antigo)
+                          return (
+                              <button 
+                                key={batch.id}
+                                onClick={() => executeDecrement(batch.id)}
+                                className={`w-full text-left p-4 rounded-xl border-2 transition-all relative group
+                                    ${isRecommended ? 'border-emerald-500 bg-emerald-50/50 hover:bg-emerald-100' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'}
+                                `}
+                              >
+                                  {isRecommended && (
+                                      <span className="absolute -top-2.5 -right-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                                          RECOMENDADO (FEFO)
+                                      </span>
+                                  )}
+                                  
+                                  <div className="flex justify-between items-center">
+                                      <div>
+                                          <p className="font-bold text-gray-800 text-sm">Lote: {batch.batch || 'S/N'}</p>
+                                          <p className="text-xs text-gray-500 mt-0.5">
+                                              Validade: {batch.expirationDate ? new Date(batch.expirationDate).toLocaleDateString('pt-BR') : 'N/A'}
+                                          </p>
+                                      </div>
+                                      <div className="text-right">
+                                          <p className="text-lg font-bold text-gray-900">{batch.quantity}</p>
+                                          <p className="text-[10px] text-gray-400 uppercase">{batch.unit}</p>
+                                      </div>
+                                  </div>
+                                  
+                                  <div className="mt-2 pt-2 border-t border-gray-200/50 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <span className="text-[10px] font-bold text-blue-600">Clique para baixar 1 unid.</span>
+                                      <ArrowRight className="w-3 h-3 text-blue-600" />
+                                  </div>
+                              </button>
+                          );
+                      })}
+                  </div>
+              </div>
+          </div>
       )}
 
     </div>
