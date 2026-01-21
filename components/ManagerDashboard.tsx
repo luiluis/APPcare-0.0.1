@@ -1,29 +1,37 @@
 
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
+import { useFinancialReports } from '../hooks/useFinancialReports';
+import { useOccupancyMetrics } from '../hooks/useOccupancyMetrics';
 import { StatCard } from './StatCard';
 import { FinancialChart } from './FinancialChart';
-import { Users, DollarSign, BedDouble, AlertTriangle, FileText, Wallet, TrendingUp, Briefcase, Palmtree, FileWarning, ArrowRight } from 'lucide-react';
+import { 
+  Users, DollarSign, BedDouble, AlertTriangle, FileText, Wallet, 
+  TrendingUp, Briefcase, Palmtree, FileWarning, ArrowRight, 
+  Calendar, PieChart, Activity, TrendingDown
+} from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
 import { InvoiceStatus } from '../types';
 import { useNavigate } from 'react-router-dom';
 
 export const ManagerDashboard: React.FC = () => {
-  const { residents, invoices, staff, hrAlerts } = useData();
+  const { invoices, staff, hrAlerts } = useData();
   const navigate = useNavigate();
 
-  // --- KPI 1: OCUPAÇÃO ---
-  const totalBeds = 50;
-  const occupiedBeds = residents.filter(r => r.status === 'Ativo' || r.status === 'Hospitalizado').length;
-  const occupancyRate = Math.round((occupiedBeds / totalBeds) * 100);
+  // --- SELETOR DE COMPETÊNCIA ---
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const selectedMonth = selectedDate.getMonth() + 1;
+  const selectedYear = selectedDate.getFullYear();
 
-  // --- KPI 2: FATURAMENTO (Mês Atual) ---
-  const currentMonth = new Date().getMonth() + 1;
-  const currentYear = new Date().getFullYear();
-  
-  const monthlyRevenue = invoices
-    .filter(i => i.type === 'income' && i.month === currentMonth && i.year === currentYear)
-    .reduce((acc, curr) => acc + curr.totalAmount, 0);
+  // --- HOOKS DE INTELIGÊNCIA ---
+  const { dre, loading: loadingDre } = useFinancialReports(selectedMonth, selectedYear);
+  const metrics = useOccupancyMetrics(dre);
+
+  const handleMonthChange = (offset: number) => {
+    const newDate = new Date(selectedDate);
+    newDate.setMonth(newDate.getMonth() + offset);
+    setSelectedDate(newDate);
+  };
 
   // --- KPI 3: EQUIPE ATIVA ---
   const activeStaffCount = staff.filter(s => s.active).length;
@@ -56,7 +64,18 @@ export const ManagerDashboard: React.FC = () => {
   const alerts = useMemo(() => {
     const list = [];
 
-    // Alerta 1: Recebimentos Atrasados
+    // Alerta de Viabilidade Econômica
+    if (metrics.profitPerBed < 0) {
+       list.push({
+         id: 'loss',
+         title: 'Prejuízo Operacional por Leito',
+         value: `Déficit de ${formatCurrency(Math.abs(metrics.profitPerBed))}/residente`,
+         icon: TrendingDown,
+         color: 'text-red-700',
+         bg: 'bg-red-100'
+       });
+    }
+
     const overdueIncome = invoices.filter(i => i.type === 'income' && i.status === InvoiceStatus.OVERDUE).length;
     if (overdueIncome > 0) {
       list.push({
@@ -64,12 +83,11 @@ export const ManagerDashboard: React.FC = () => {
         title: 'Mensalidades em Atraso',
         value: `${overdueIncome} faturas`,
         icon: AlertTriangle,
-        color: 'text-red-600',
-        bg: 'bg-red-50'
+        color: 'text-amber-600',
+        bg: 'bg-amber-50'
       });
     }
 
-    // Alerta 2: Contas a Pagar (Vencendo Hoje/Amanhã - Simulação baseada em pendentes)
     const pendingExpenses = invoices.filter(i => i.type === 'expense' && i.status === InvoiceStatus.PENDING).length;
     if (pendingExpenses > 0) {
       list.push({
@@ -77,24 +95,13 @@ export const ManagerDashboard: React.FC = () => {
         title: 'Contas a Pagar (Pendentes)',
         value: `${pendingExpenses} lançamentos`,
         icon: Wallet,
-        color: 'text-amber-600',
-        bg: 'bg-amber-50'
+        color: 'text-blue-600',
+        bg: 'bg-blue-50'
       });
     }
 
-    // Alerta 3: Contratos (Simulado para atender o prompt, já que não temos data de expiração no mock)
-    // Lógica real: Filtraria documents com category 'contract' e data próxima
-    list.push({
-      id: 'contracts',
-      title: 'Renovação de Contratos',
-      value: '2 vencendo em breve',
-      icon: FileText,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50'
-    });
-
     return list;
-  }, [invoices]);
+  }, [invoices, metrics]);
 
   const getHRAlertIcon = (type: string) => {
       switch (type) {
@@ -108,66 +115,158 @@ export const ManagerDashboard: React.FC = () => {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       
-      {/* Header */}
+      {/* Header & Seletor */}
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Visão Gerencial</h1>
-          <p className="text-gray-500 text-sm">Resumo executivo da operação e financeiro.</p>
+          <p className="text-gray-500 text-sm">Saúde financeira e operacional da unidade.</p>
         </div>
-        <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-gray-100 shadow-sm">
-           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-           <span className="text-xs font-bold text-gray-600 uppercase">Sistema Operante</span>
-        </div>
+        
+        <div className="flex items-center bg-white p-1 rounded-xl border border-gray-200 shadow-sm">
+             <button onClick={() => handleMonthChange(-1)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"><ArrowRight className="w-5 h-5 rotate-180"/></button>
+             <div className="px-4 text-center min-w-[160px] flex items-center justify-center gap-2">
+                 <Calendar className="w-4 h-4 text-blue-600" />
+                 <span className="text-sm font-bold text-gray-900 capitalize">
+                    {selectedDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                 </span>
+             </div>
+             <button onClick={() => handleMonthChange(1)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"><ArrowRight className="w-5 h-5"/></button>
+         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* KPI Cards (Operacionais e Financeiros) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-          title="Ocupação Atual" 
-          value={`${occupiedBeds}/${totalBeds}`} 
+          title="Ocupação" 
+          value={`${metrics.occupiedBeds}/${metrics.totalCapacity}`} 
           icon={<BedDouble className="w-6 h-6"/>} 
           color="blue"
-          trend={`${occupancyRate}% preenchido`}
-          trendUp={occupancyRate > 80}
+          trend={`${metrics.occupancyRate.toFixed(0)}% preenchido`}
+          trendUp={metrics.occupancyRate > 80}
         />
         <StatCard 
-          title="Faturamento (Mês)" 
-          value={formatCurrency(monthlyRevenue)} 
+          title="Resultado (EBITDA)" 
+          value={formatCurrency(dre?.ebitda || 0)} 
+          icon={<Activity className="w-6 h-6"/>} 
+          color={dre?.ebitda && dre.ebitda >= 0 ? "green" : "red"}
+          trend="Resultado Operacional"
+          trendUp={!!dre?.ebitda && dre.ebitda > 0}
+        />
+        <StatCard 
+          title="Ticket Médio" 
+          value={formatCurrency(metrics.averageTicket)} 
           icon={<DollarSign className="w-6 h-6"/>} 
-          color="green"
-          trend="Consolidado"
+          color="emerald"
+          trend="Receita por Residente"
           trendUp={true}
         />
         <StatCard 
-          title="Equipe Ativa" 
-          value={activeStaffCount} 
-          icon={<Users className="w-6 h-6"/>} 
-          color="purple"
-          trend="Colaboradores"
-          trendUp={true}
+          title="Custo por Leito" 
+          value={formatCurrency(metrics.costPerBed)} 
+          icon={<PieChart className="w-6 h-6"/>} 
+          color={metrics.profitPerBed >= 0 ? "indigo" : "red"}
+          trend={`Lucro: ${formatCurrency(metrics.profitPerBed)}`}
+          trendUp={metrics.profitPerBed >= 0}
         />
       </div>
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Left Column: Financial Chart */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-           <div className="flex items-center justify-between mb-6">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                 <TrendingUp className="w-5 h-5 text-blue-600" /> Performance Financeira
-              </h3>
-              <select className="text-xs font-bold bg-gray-50 border-none rounded-lg py-1 px-3 text-gray-500">
-                 <option>Últimos 6 meses</option>
-              </select>
+        {/* Left Column: DRE & Charts */}
+        <div className="lg:col-span-2 space-y-8">
+           
+           {/* DRE Simplificado */}
+           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+               <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                   <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                       <FileText className="w-5 h-5 text-gray-500" /> DRE Gerencial
+                   </h3>
+                   <span className="text-xs font-medium text-gray-500 bg-white px-2 py-1 rounded border">Regime de Competência</span>
+               </div>
+               
+               <div className="p-6 space-y-4">
+                   {/* Receita */}
+                   <div className="flex justify-between items-center text-sm">
+                       <span className="font-medium text-gray-600">Receita Bruta</span>
+                       <span className="font-bold text-emerald-600">{formatCurrency(dre?.grossRevenue)}</span>
+                   </div>
+                   <div className="flex justify-between items-center text-sm">
+                       <span className="font-medium text-gray-400 pl-4">(-) Impostos (Simples 6%)</span>
+                       <span className="text-red-400">{formatCurrency(dre?.taxes)}</span>
+                   </div>
+                   <div className="border-b border-gray-100 my-1"></div>
+                   
+                   <div className="flex justify-between items-center text-sm font-bold">
+                       <span className="text-gray-700">(=) Receita Líquida</span>
+                       <span className="text-gray-900">{formatCurrency(dre?.netRevenue)}</span>
+                   </div>
+
+                   {/* Custos */}
+                   <div className="flex justify-between items-center text-sm mt-4">
+                       <span className="font-medium text-gray-400 pl-4">(-) Custo Variável (Estoque/Farmácia)</span>
+                       <span className="text-red-500">{formatCurrency(dre?.variableCosts)}</span>
+                   </div>
+                   <div className="flex justify-between items-center text-sm">
+                       <span className="font-medium text-gray-400 pl-4">(-) Despesas Operacionais (Fixas/Folha)</span>
+                       <span className="text-red-500">{formatCurrency(dre?.operationalExpenses)}</span>
+                   </div>
+                   
+                   {/* Resultado */}
+                   <div className="border-t-2 border-gray-100 pt-3 mt-2 flex justify-between items-center">
+                       <span className="font-bold text-base text-gray-900 uppercase tracking-wide">Resultado (EBITDA)</span>
+                       <span className={`font-extrabold text-xl ${dre?.ebitda && dre.ebitda >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                           {formatCurrency(dre?.ebitda)}
+                       </span>
+                   </div>
+                   
+                   {dre?.ebitda && dre.ebitda < 0 && (
+                       <div className="bg-red-50 text-red-700 text-xs p-3 rounded-xl flex items-start gap-2 mt-2">
+                           <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                           <p>Atenção: A operação está deficitária neste mês. O custo por leito ({formatCurrency(metrics.costPerBed)}) supera o ticket médio ({formatCurrency(metrics.averageTicket)}). Ponto de equilíbrio estimado: {metrics.breakEvenPoint} residentes.</p>
+                       </div>
+                   )}
+               </div>
            </div>
-           <FinancialChart data={chartData} />
+
+           {/* Gráfico Histórico */}
+           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+               <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                     <TrendingUp className="w-5 h-5 text-blue-600" /> Histórico Semestral
+                  </h3>
+               </div>
+               <FinancialChart data={chartData} />
+           </div>
         </div>
 
         {/* Right Column: Alerts & Quick Stats */}
         <div className="space-y-6">
            
-           {/* Radar RH Widget (NOVO) */}
+           {/* Alerts List */}
+           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                 <AlertTriangle className="w-5 h-5 text-amber-500" /> Alertas do Mês
+              </h3>
+              <div className="space-y-3">
+                 {alerts.map(alert => (
+                    <div key={alert.id} className="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100 group cursor-pointer">
+                       <div className={`p-3 rounded-xl ${alert.bg} ${alert.color}`}>
+                          <alert.icon className="w-5 h-5" />
+                       </div>
+                       <div>
+                          <p className="text-sm font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{alert.title}</p>
+                          <p className="text-xs text-gray-500 font-medium">{alert.value}</p>
+                       </div>
+                    </div>
+                 ))}
+                 {alerts.length === 0 && (
+                   <p className="text-sm text-gray-400 italic text-center py-4">Nenhum alerta crítico pendente.</p>
+                 )}
+              </div>
+           </div>
+
+           {/* Radar RH Widget */}
            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
               <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-gray-900 flex items-center gap-2">
@@ -208,29 +307,6 @@ export const ManagerDashboard: React.FC = () => {
                           <p className="text-xs text-gray-500">Nenhuma pendência trabalhista encontrada.</p>
                       </div>
                   )}
-              </div>
-           </div>
-
-           {/* Alerts List */}
-           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                 <AlertTriangle className="w-5 h-5 text-amber-500" /> Alertas Administrativos
-              </h3>
-              <div className="space-y-3">
-                 {alerts.map(alert => (
-                    <div key={alert.id} className="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100 group cursor-pointer">
-                       <div className={`p-3 rounded-xl ${alert.bg} ${alert.color}`}>
-                          <alert.icon className="w-5 h-5" />
-                       </div>
-                       <div>
-                          <p className="text-sm font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{alert.title}</p>
-                          <p className="text-xs text-gray-500">{alert.value}</p>
-                       </div>
-                    </div>
-                 ))}
-                 {alerts.length === 0 && (
-                   <p className="text-sm text-gray-400 italic">Nenhum alerta pendente.</p>
-                 )}
               </div>
            </div>
 

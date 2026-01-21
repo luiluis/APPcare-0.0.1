@@ -118,6 +118,15 @@ export const dataService = {
   getIncidents: async () => simulateNetwork(db_incidents, 0),
   getIncidentsByResident: async (resId: string) => simulateNetwork(db_incidents.filter(i => i.residentId === resId), 0),
 
+  // NOVO: Busca movimentos financeiros (custos variáveis/estoque)
+  getFinancialMovements: async (month: number, year: number) => {
+      const movements = db_financial_movements.filter(m => {
+          const date = new Date(m.date);
+          return date.getMonth() + 1 === month && date.getFullYear() === year;
+      });
+      return simulateNetwork(movements, 0);
+  },
+
   // --- QUERIES STAFF (RH) & FISCAL ---
   getStaff: async () => simulateNetwork(db_staff, 0),
   
